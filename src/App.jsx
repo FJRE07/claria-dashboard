@@ -1204,13 +1204,15 @@ function Dashboard({ logout }) {
       API.getDashboard(periodo),
       API.getFijos(),
       API.getMSI(),
-    ]).then(([dash,fijosData,msiData])=>{
+      API.getPresupuestoGrupos(),
+    ]).then(([dash,fijosData,msiData,grupos])=>{
       if(dash.ingreso) setIncome(Number(dash.ingreso));
       const txsApi=dash.ultimasTransacciones||[];
       if(txsApi.length) setTxs(txsApi.map(mapApiTx));
       else setOnboarding(true);
       if(fijosData.fijos?.length) setFixedItems(fijosData.fijos.map(mapApiFijo));
       if(msiData.msi?.length)     setMsiPlans(msiData.msi.map(mapApiMsi));
+      if(grupos && Object.values(grupos).some(v=>v>0)) setGroupBudgets(grupos);
     }).catch(err=>{
       console.error("ClarIA API:", err);
       setApiError(err.message);
@@ -1229,6 +1231,16 @@ function Dashboard({ logout }) {
       via:             tx.src ?? "manual",
       fecha_operacion: tx.date,
     }).catch(err=>console.error("Error guardando en API:",err));
+  };
+
+  const saveGroupBudgets = (updater) => {
+    setGroupBudgets(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      Object.entries(next).forEach(([p, m]) => {
+        if(prev[p] !== m) API.putPresupuestoGrupo(p, m).catch(console.error);
+      });
+      return next;
+    });
   };
 
   if(onboarding) return <OnboardingScreen onDone={()=>{ setOnboarding(false); cargarDatos(); }}/>;
@@ -1289,7 +1301,7 @@ function Dashboard({ logout }) {
           {tab==="fixed"        &&<FixedExpenses items={fixedItems} setItems={setFixedItems} income={income}/>}
           {tab==="cards"        &&<CreditCards   txs={txs}/>}
           {tab==="msi"          &&<MSIPlans      plans={msiPlans}/>}
-          {tab==="budget"       &&<Budget        groupBudgets={groupBudgets} setGroupBudgets={setGroupBudgets} income={income}/>}
+          {tab==="budget"       &&<Budget        groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income}/>}
           {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx}/>}
         </div>
       </main>
