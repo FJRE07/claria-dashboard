@@ -25,7 +25,11 @@ async function req(method, path, body) {
 
 export const login          = (email, password) => req("POST", "/auth/login", { email, password });
 export const setup          = (email, password) => req("POST", "/auth/setup", { email, password });
-export const getDashboard   = (periodo) => req("GET", `/api/dashboard?periodo=${periodo}`);
+export const getIngresos    = ()              => req("GET", "/api/ingresos");
+export const postIngreso    = (data)          => req("POST", "/api/ingresos", data);
+export const putIngreso     = (id, data)      => req("PUT", `/api/ingresos/${id}`, data);
+export const deleteIngreso  = (id)            => req("DELETE", `/api/ingresos/${id}`);
+export const getDashboard   = (periodo)       => req("GET", `/api/dashboard?periodo=${periodo}`);
 export const getGastos      = (params = {}) => req("GET", `/api/gastos?${new URLSearchParams(params)}`);
 export const postGasto      = (data) => req("POST", "/api/gastos", data);
 export const putGasto       = (id, data) => req("PUT", `/api/gastos/${id}`, data);

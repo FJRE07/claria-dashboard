@@ -1018,84 +1018,179 @@ function WABot({ onAdd }) {
   );
 }
 
-// ── ONBOARDING ────────────────────────────────────────────────────────────────
-function OnboardingScreen({ onDone }) {
-  const [file,setFile]=useState(null);
-  const [busy,setBusy]=useState(false);
-  const [result,setResult]=useState(null);
-  const [err,setErr]=useState("");
+// ── ONBOARDING WIZARD ─────────────────────────────────────────────────────────
+const GRUPOS_FIJO = ["Vivienda","Salud","Servicios","Gimnasio","Entretenimiento","Telecom","Inversión","Trabajo / Consulta","Celular","Otros"];
+const PASOS_WZ   = ["💰 Ingresos","📄 Estados de cuenta","📌 Gastos fijos","🎯 Presupuesto"];
 
-  const importar=async()=>{
-    if(!file)return;
-    setBusy(true); setErr("");
-    try {
-      const text=await file.text();
-      const res=await API.importCSV(text);
-      setResult(res);
-    } catch(e){ setErr(e.message); }
-    finally{ setBusy(false); }
+function OnboardingWizard({ onDone, defaultGroupBudgets }) {
+  const [paso,setPaso]=useState(0);
+  const [ingresos,setIngresos]=useState([]);
+  const [nConcepto,setNConcepto]=useState(""); const [nMonto,setNMonto]=useState("");
+  const [archivo,setArchivo]=useState(null); const [importResult,setImportResult]=useState(null);
+  const [uploadBusy,setUploadBusy]=useState(false);
+  const [fijos,setFijos]=useState([]); const [fErr,setFErr]=useState("");
+  const [fConcepto,setFConcepto]=useState(""); const [fMonto,setFMonto]=useState(""); const [fGrupo,setFGrupo]=useState("Vivienda");
+  const [grupos,setGrupos]=useState(defaultGroupBudgets);
+  const [busy,setBusy]=useState(false); const [err,setErr]=useState("");
+
+  useEffect(()=>{
+    API.getIngresos().then(setIngresos).catch(()=>{});
+    API.getFijos().then(d=>setFijos(d.fijos||[])).catch(()=>{});
+  },[]);
+
+  const addIngreso=async()=>{
+    if(!nConcepto||!nMonto)return;
+    try{ const r=await API.postIngreso({concepto:nConcepto,monto:parseFloat(nMonto)}); setIngresos(p=>[...p,r]); setNConcepto(""); setNMonto(""); }
+    catch(e){ setErr(e.message); }
+  };
+  const rmIngreso=async id=>{ await API.deleteIngreso(id); setIngresos(p=>p.filter(i=>i.id!==id)); };
+
+  const importarCSV=async()=>{
+    if(!archivo)return; setUploadBusy(true); setFErr("");
+    try{ const t=await archivo.text(); const r=await API.importCSV(t); setImportResult(r); }
+    catch(e){ setFErr(e.message); } finally{ setUploadBusy(false); }
   };
 
+  const addFijo=async()=>{
+    if(!fConcepto||!fMonto)return;
+    try{ const r=await API.postFijo({detalle:fConcepto,monto:parseFloat(fMonto),grupo:fGrupo}); setFijos(p=>[...p,r]); setFConcepto(""); setFMonto(""); }
+    catch(e){ setFErr(e.message); }
+  };
+  const rmFijo=async id=>{ await API.deleteFijo(id); setFijos(p=>p.filter(f=>f.id!==id)); };
+
+  const finalizar=async()=>{
+    setBusy(true);
+    try{ await Promise.all(Object.entries(grupos).map(([p,m])=>API.putPresupuestoGrupo(p,m))); onDone(); }
+    catch(e){ setErr(e.message); } finally{ setBusy(false); }
+  };
+
+  const IS2={background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:F};
+  const nextDisabled=paso===0&&ingresos.length===0;
+
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:C.bg, fontFamily:F }}>
+    <div style={{ display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:C.bg,fontFamily:F,padding:24 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
-      <div style={{ width:480, background:C.card, border:`1px solid ${C.border}`, borderRadius:24, padding:"40px 40px" }}>
-        {!result ? <>
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:28 }}>
-            <div style={{ width:44, height:44, borderRadius:14, background:`linear-gradient(135deg,${C.accent},#00A882)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>◈</div>
-            <div>
-              <div style={{ color:C.text, fontWeight:700, fontSize:20, fontFamily:F }}>Bienvenido a ClarIA</div>
-              <div style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>Configura tu cuenta en 1 paso</div>
-            </div>
+      <div style={{ width:"100%",maxWidth:560 }}>
+
+        {/* Header */}
+        <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:20 }}>
+          <div style={{ width:40,height:40,borderRadius:12,background:`linear-gradient(135deg,${C.accent},#00A882)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20 }}>◈</div>
+          <div>
+            <div style={{ color:C.text,fontWeight:700,fontSize:18 }}>Configurar ClarIA</div>
+            <div style={{ color:C.textMuted,fontSize:12 }}>{PASOS_WZ[paso]}</div>
           </div>
-          <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"20px 22px", marginBottom:24 }}>
-            <div style={{ color:C.text, fontSize:14, fontWeight:600, fontFamily:F, marginBottom:6 }}>1. Descarga tu estado de cuenta BBVA</div>
-            <div style={{ color:C.textMuted, fontSize:12, fontFamily:F, lineHeight:1.6 }}>
-              App BBVA → Estados de cuenta → Selecciona el período → Descargar CSV
-            </div>
-          </div>
-          <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"20px 22px", marginBottom:24 }}>
-            <div style={{ color:C.text, fontSize:14, fontWeight:600, fontFamily:F, marginBottom:12 }}>2. Sube el archivo aquí</div>
-            <label style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, border:`2px dashed ${file?C.accent:C.border}`, borderRadius:10, cursor:"pointer" }}>
-              <span style={{ fontSize:22 }}>📄</span>
-              <div>
-                <div style={{ color:file?C.accent:C.textDim, fontSize:13, fontFamily:F, fontWeight:500 }}>
-                  {file ? file.name : "Seleccionar archivo CSV"}
+        </div>
+
+        {/* Barra de progreso */}
+        <div style={{ display:"flex",gap:6,marginBottom:24 }}>
+          {PASOS_WZ.map((_,i)=><div key={i} style={{ flex:1,height:4,borderRadius:99,background:i<=paso?C.accent:C.border,transition:"background 0.3s" }}/>)}
+        </div>
+
+        {/* Card del paso */}
+        <div style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:20,padding:"28px 32px" }}>
+
+          {/* PASO 0 — Ingresos */}
+          {paso===0&&<>
+            <div style={{ color:C.text,fontSize:16,fontWeight:600,marginBottom:4 }}>¿Cuáles son tus ingresos?</div>
+            <div style={{ color:C.textMuted,fontSize:13,marginBottom:20 }}>Agrega todos: salario, freelance, renta, negocio…</div>
+            {ingresos.map(i=>(
+              <div key={i.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:C.surface,borderRadius:10,marginBottom:8 }}>
+                <div>
+                  <div style={{ color:C.text,fontSize:13,fontWeight:500 }}>{i.concepto}</div>
+                  <div style={{ color:C.accent,fontSize:13,fontWeight:700 }}>{fmt(i.monto)}/mes</div>
                 </div>
-                <div style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Formato BBVA · .csv</div>
-              </div>
-              <input type="file" accept=".csv" style={{ display:"none" }} onChange={e=>setFile(e.target.files[0])}/>
-            </label>
-          </div>
-          {err&&<div style={{ color:C.red, fontSize:12, fontFamily:F, marginBottom:14, padding:"10px 14px", background:C.redDim, borderRadius:8 }}>{err}</div>}
-          <button onClick={importar} disabled={!file||busy}
-            style={{ width:"100%", background:file?C.accent:C.border, border:"none", borderRadius:10, color:C.bg, padding:"13px", fontSize:14, fontWeight:600, cursor:file&&!busy?"pointer":"default", fontFamily:F, marginBottom:12 }}>
-            {busy?"Importando…":"Importar transacciones"}
-          </button>
-          <button onClick={onDone} style={{ width:"100%", background:"transparent", border:`1px solid ${C.border}`, borderRadius:10, color:C.textMuted, padding:"11px", fontSize:13, cursor:"pointer", fontFamily:F }}>
-            Configurar después — ir al dashboard
-          </button>
-        </> : <>
-          <div style={{ textAlign:"center", marginBottom:28 }}>
-            <div style={{ fontSize:48, marginBottom:16 }}>✅</div>
-            <div style={{ color:C.accent, fontSize:20, fontWeight:700, fontFamily:F, marginBottom:8 }}>¡Listo!</div>
-            <div style={{ color:C.textDim, fontSize:14, fontFamily:F }}>Tus datos están cargados</div>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:28 }}>
-            {[
-              { lbl:"Transacciones importadas", val:result.transacciones, col:C.accent },
-              { lbl:"Planes MSI detectados",    val:result.msi,           col:C.yellow },
-            ].map(s=>(
-              <div key={s.lbl} style={{ background:C.surface, borderRadius:12, padding:"16px", textAlign:"center" }}>
-                <div style={{ color:s.col, fontSize:28, fontWeight:700, fontFamily:F }}>{s.val}</div>
-                <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginTop:4 }}>{s.lbl}</div>
+                <button onClick={()=>rmIngreso(i.id)} style={{ background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18 }}>✕</button>
               </div>
             ))}
-          </div>
-          <button onClick={onDone} style={{ width:"100%", background:C.accent, border:"none", borderRadius:10, color:C.bg, padding:"13px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:F }}>
-            Ver mi dashboard
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 110px auto",gap:8,marginTop:12 }}>
+              <input value={nConcepto} onChange={e=>setNConcepto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addIngreso()} placeholder="Ej: Salario, Freelance, Renta" style={IS2}/>
+              <input value={nMonto} onChange={e=>setNMonto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addIngreso()} type="number" placeholder="Monto" style={IS2}/>
+              <button onClick={addIngreso} style={{ background:C.accent,border:"none",borderRadius:8,color:C.bg,padding:"0 16px",cursor:"pointer",fontWeight:600,fontSize:13 }}>+ Agregar</button>
+            </div>
+          </>}
+
+          {/* PASO 1 — Estados de cuenta */}
+          {paso===1&&<>
+            <div style={{ color:C.text,fontSize:16,fontWeight:600,marginBottom:4 }}>Importa tus estados de cuenta</div>
+            <div style={{ color:C.textMuted,fontSize:13,marginBottom:20 }}>Sube los CSVs de tus tarjetas BBVA. Puedes importar varias.</div>
+            {importResult&&(
+              <div style={{ background:C.accentDim,border:`1px solid ${C.accent}30`,borderRadius:12,padding:"14px 18px",marginBottom:14 }}>
+                <div style={{ color:C.accent,fontWeight:700,fontSize:13 }}>✅ {importResult.transacciones} transacciones importadas</div>
+                {importResult.msi>0&&<div style={{ color:C.textDim,fontSize:12,marginTop:4 }}>{importResult.msi} planes MSI detectados</div>}
+              </div>
+            )}
+            <label style={{ display:"flex",alignItems:"center",gap:12,padding:16,background:C.surface,border:`2px dashed ${archivo?C.accent:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:10 }}>
+              <span style={{ fontSize:22 }}>📄</span>
+              <div>
+                <div style={{ color:archivo?C.accent:C.textDim,fontSize:13,fontWeight:500 }}>{archivo?archivo.name:"Seleccionar CSV"}</div>
+                <div style={{ color:C.textMuted,fontSize:11 }}>Formato BBVA · .csv</div>
+              </div>
+              <input type="file" accept=".csv" style={{ display:"none" }} onChange={e=>{setArchivo(e.target.files[0]);setImportResult(null);}}/>
+            </label>
+            {archivo&&<button onClick={importarCSV} disabled={uploadBusy} style={{ width:"100%",background:C.accent,border:"none",borderRadius:10,color:C.bg,padding:"11px",fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:8 }}>
+              {uploadBusy?"Importando…":"Importar"}
+            </button>}
+            {fErr&&<div style={{ color:C.red,fontSize:12,marginTop:8 }}>{fErr}</div>}
+          </>}
+
+          {/* PASO 2 — Gastos fijos */}
+          {paso===2&&<>
+            <div style={{ color:C.text,fontSize:16,fontWeight:600,marginBottom:4 }}>Gastos fijos mensuales</div>
+            <div style={{ color:C.textMuted,fontSize:13,marginBottom:20 }}>Lo que pagas siempre: renta, gym, suscripciones…</div>
+            {fijos.length>0&&<div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
+              {fijos.map(f=>(
+                <div key={f.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:C.surface,borderRadius:10 }}>
+                  <div>
+                    <div style={{ color:C.text,fontSize:13,fontWeight:500 }}>{f.detalle||f.nombre}</div>
+                    <div style={{ color:C.textMuted,fontSize:11 }}>{f.grupo||f.categoria||"—"}</div>
+                  </div>
+                  <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                    <span style={{ color:C.accent,fontSize:13,fontWeight:700 }}>{fmt(f.monto)}</span>
+                    <button onClick={()=>rmFijo(f.id)} style={{ background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18 }}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>}
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 90px 130px auto",gap:8 }}>
+              <input value={fConcepto} onChange={e=>setFConcepto(e.target.value)} placeholder="Renta, Netflix…" style={IS2}/>
+              <input value={fMonto} onChange={e=>setFMonto(e.target.value)} type="number" placeholder="Monto" style={IS2}/>
+              <select value={fGrupo} onChange={e=>setFGrupo(e.target.value)} style={{ ...IS2,cursor:"pointer" }}>
+                {GRUPOS_FIJO.map(g=><option key={g} value={g}>{g}</option>)}
+              </select>
+              <button onClick={addFijo} style={{ background:C.accent,border:"none",borderRadius:8,color:C.bg,padding:"0 14px",cursor:"pointer",fontWeight:600,fontSize:13 }}>+</button>
+            </div>
+            {fErr&&<div style={{ color:C.red,fontSize:12,marginTop:8 }}>{fErr}</div>}
+          </>}
+
+          {/* PASO 3 — Presupuesto */}
+          {paso===3&&<>
+            <div style={{ color:C.text,fontSize:16,fontWeight:600,marginBottom:4 }}>Define tu presupuesto</div>
+            <div style={{ color:C.textMuted,fontSize:13,marginBottom:20 }}>¿Cuánto quieres destinar a cada prioridad al mes?</div>
+            {PRIORITIES.map(p=>(
+              <div key={p} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:C.surface,borderRadius:10,marginBottom:8 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                  <div style={{ width:8,height:8,borderRadius:"50%",background:PM[p].color }}/>
+                  <span style={{ color:C.text,fontSize:13,fontWeight:500 }}>{p}</span>
+                </div>
+                <input type="number" value={grupos[p]||""} onChange={e=>setGrupos(prev=>({...prev,[p]:parseFloat(e.target.value)||0}))}
+                  style={{ ...IS2,width:130,textAlign:"right",color:PM[p].color,fontWeight:700 }}/>
+              </div>
+            ))}
+            {err&&<div style={{ color:C.red,fontSize:12,marginTop:8 }}>{err}</div>}
+          </>}
+        </div>
+
+        {/* Botones de navegación */}
+        <div style={{ display:"flex",justifyContent:"space-between",marginTop:16,gap:10 }}>
+          <button onClick={()=>paso===0?onDone():setPaso(p=>p-1)}
+            style={{ background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,color:C.textMuted,padding:"11px 20px",fontSize:13,cursor:"pointer",fontFamily:F }}>
+            {paso===0?"Omitir todo":"← Anterior"}
           </button>
-        </>}
+          <button onClick={paso===3?finalizar:()=>setPaso(p=>p+1)} disabled={nextDisabled||busy}
+            style={{ background:nextDisabled?C.border:C.accent,border:"none",borderRadius:10,color:C.bg,padding:"11px 28px",fontSize:13,fontWeight:600,cursor:nextDisabled?"default":"pointer",fontFamily:F }}>
+            {paso===3?(busy?"Guardando…":"¡Empezar!"):"Siguiente →"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1209,7 +1304,7 @@ function Dashboard({ logout }) {
       if(dash.ingreso) setIncome(Number(dash.ingreso));
       const txsApi=dash.ultimasTransacciones||[];
       if(txsApi.length) setTxs(txsApi.map(mapApiTx));
-      else setOnboarding(true);
+      if(!dash.ingreso||dash.ingreso===0) setOnboarding(true);
       if(fijosData.fijos?.length) setFixedItems(fijosData.fijos.map(mapApiFijo));
       if(msiData.msi?.length)     setMsiPlans(msiData.msi.map(mapApiMsi));
       if(grupos && Object.values(grupos).some(v=>v>0)) setGroupBudgets(grupos);
@@ -1243,7 +1338,7 @@ function Dashboard({ logout }) {
     });
   };
 
-  if(onboarding) return <OnboardingScreen onDone={()=>{ setOnboarding(false); cargarDatos(); }}/>;
+  if(onboarding) return <OnboardingWizard defaultGroupBudgets={groupBudgets} onDone={()=>{ setOnboarding(false); cargarDatos(); }}/>;
 
   const alerts=computeAlerts(txs,fixedItems,income,msiPlans);
   return (
