@@ -112,12 +112,17 @@ const mapApiTx = (t) => ({
   cardId: null,
 });
 
+const GRUPO_ICON = {
+  "Inversión":"📈", "Gimnasio":"🏋️", "Trabajo / Consulta":"💻",
+  "Celular":"📱", "Entretenimiento":"🎬", "Vivienda":"🏠",
+  "Servicios":"💡", "Salud":"💊", "Transporte":"🚗", "Seguros":"🛡️",
+};
 const mapApiFijo = (f, i) => ({
   id: f.id ?? i + 1,
   name: f.detalle ?? f.nombre ?? f.descripcion ?? "Gasto fijo",
   amt: Number(f.monto ?? 0),
-  cat: f.categoria ?? "Otros",
-  icon: f.icono ?? "💡",
+  cat: f.grupo ?? f.categoria ?? "Otros",
+  icon: f.icono ?? GRUPO_ICON[f.grupo] ?? "💡",
   day: Number(f.dia_cobro ?? f.dia ?? 1),
 });
 
@@ -1013,6 +1018,70 @@ function WABot({ onAdd }) {
   );
 }
 
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function LoginScreen() {
+  const [modo,setModo]=useState("login"); // "login" | "setup"
+  const [email,setEmail]=useState("");
+  const [pwd,setPwd]=useState("");
+  const [pwd2,setPwd2]=useState("");
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  const submit=async()=>{
+    setErr(""); setBusy(true);
+    try {
+      const fn = modo==="setup" ? API.setup : API.login;
+      if(modo==="setup"&&pwd!==pwd2){ setErr("Las contraseñas no coinciden"); setBusy(false); return; }
+      const res = await fn(email, pwd);
+      localStorage.setItem("claria_token", res.token);
+      window.location.reload();
+    } catch(e) {
+      setErr(modo==="setup"
+        ? (e.message.includes("409")?"La cuenta ya tiene contraseña — usa Iniciar sesión":e.message)
+        : "Correo o contraseña incorrectos");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:C.bg, fontFamily:F }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
+      <div style={{ width:380, background:C.card, border:`1px solid ${C.border}`, borderRadius:24, padding:"40px 36px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:32 }}>
+          <div style={{ width:44, height:44, borderRadius:14, background:`linear-gradient(135deg,${C.accent},#00A882)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>◈</div>
+          <div>
+            <div style={{ color:C.text, fontWeight:700, fontSize:22 }}>ClarIA</div>
+            <div style={{ color:C.textMuted, fontSize:11, textTransform:"uppercase", letterSpacing:"0.12em" }}>Finanzas IA</div>
+          </div>
+        </div>
+        <div style={{ color:C.textMuted, fontSize:11, marginBottom:6 }}>Correo</div>
+        <input value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="correo@ejemplo.com"
+          style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", color:C.text, fontSize:13, outline:"none", width:"100%", marginBottom:14 }}/>
+        <div style={{ color:C.textMuted, fontSize:11, marginBottom:6 }}>Contraseña</div>
+        <input value={pwd} onChange={e=>setPwd(e.target.value)} type="password" placeholder="••••••••"
+          onKeyDown={e=>e.key==="Enter"&&submit()}
+          style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", color:C.text, fontSize:13, outline:"none", width:"100%", marginBottom: modo==="setup"?14:24 }}/>
+        {modo==="setup"&&<>
+          <div style={{ color:C.textMuted, fontSize:11, marginBottom:6 }}>Confirmar contraseña</div>
+          <input value={pwd2} onChange={e=>setPwd2(e.target.value)} type="password" placeholder="••••••••"
+            onKeyDown={e=>e.key==="Enter"&&submit()}
+            style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", color:C.text, fontSize:13, outline:"none", width:"100%", marginBottom:24 }}/>
+        </>}
+        {err&&<div style={{ color:C.red, fontSize:12, marginBottom:14, textAlign:"center" }}>{err}</div>}
+        <button onClick={submit} disabled={busy}
+          style={{ width:"100%", background:C.accent, border:"none", borderRadius:8, color:C.bg, padding:"11px", fontSize:14, fontWeight:600, cursor:busy?"default":"pointer", fontFamily:F, marginBottom:16 }}>
+          {busy?"…":modo==="setup"?"Crear cuenta":"Entrar"}
+        </button>
+        <div style={{ textAlign:"center" }}>
+          <button onClick={()=>{setModo(m=>m==="login"?"setup":"login");setErr("");}}
+            style={{ background:"none", border:"none", color:C.textMuted, fontSize:12, cursor:"pointer", fontFamily:F, textDecoration:"underline" }}>
+            {modo==="login"?"Primera vez — configurar cuenta":"Ya tengo cuenta — iniciar sesión"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TABS=[
   { id:"estado",       label:"Estado",        icon:"📊" },
   { id:"fixed",        label:"Gastos Fijos",  icon:"📌" },
@@ -1023,6 +1092,16 @@ const TABS=[
 ];
 
 export default function App() {
+  const [token,setToken]=useState(()=>localStorage.getItem("claria_token"));
+
+  if(!token) return <LoginScreen/>;
+
+  const logout=()=>{ localStorage.removeItem("claria_token"); setToken(null); };
+
+  return <Dashboard logout={logout}/>;
+}
+
+function Dashboard({ logout }) {
   const [tab,setTab]=useState("estado");
   const [txs,setTxs]=useState(INIT_TX);
   const [sidebarOpen,setSidebar]=useState(true);
@@ -1109,6 +1188,10 @@ export default function App() {
             <p style={{ color:C.textMuted, fontSize:12, marginTop:2, fontFamily:F }}>Mayo 2026 · {txs.length} movimientos</p>
           </div>
           <NotificationBell alerts={alerts}/>
+          <button onClick={logout} title="Cerrar sesión"
+            style={{ width:36, height:36, borderRadius:10, background:"transparent", border:`1px solid ${C.border}`, cursor:"pointer", color:C.textDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red;e.currentTarget.style.color=C.red;}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textDim;}}>⏻</button>
         </header>
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px" }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings}/>}
