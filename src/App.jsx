@@ -1018,6 +1018,89 @@ function WABot({ onAdd }) {
   );
 }
 
+// ── ONBOARDING ────────────────────────────────────────────────────────────────
+function OnboardingScreen({ onDone }) {
+  const [file,setFile]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [result,setResult]=useState(null);
+  const [err,setErr]=useState("");
+
+  const importar=async()=>{
+    if(!file)return;
+    setBusy(true); setErr("");
+    try {
+      const text=await file.text();
+      const res=await API.importCSV(text);
+      setResult(res);
+    } catch(e){ setErr(e.message); }
+    finally{ setBusy(false); }
+  };
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:C.bg, fontFamily:F }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
+      <div style={{ width:480, background:C.card, border:`1px solid ${C.border}`, borderRadius:24, padding:"40px 40px" }}>
+        {!result ? <>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:28 }}>
+            <div style={{ width:44, height:44, borderRadius:14, background:`linear-gradient(135deg,${C.accent},#00A882)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>◈</div>
+            <div>
+              <div style={{ color:C.text, fontWeight:700, fontSize:20, fontFamily:F }}>Bienvenido a ClarIA</div>
+              <div style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>Configura tu cuenta en 1 paso</div>
+            </div>
+          </div>
+          <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"20px 22px", marginBottom:24 }}>
+            <div style={{ color:C.text, fontSize:14, fontWeight:600, fontFamily:F, marginBottom:6 }}>1. Descarga tu estado de cuenta BBVA</div>
+            <div style={{ color:C.textMuted, fontSize:12, fontFamily:F, lineHeight:1.6 }}>
+              App BBVA → Estados de cuenta → Selecciona el período → Descargar CSV
+            </div>
+          </div>
+          <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"20px 22px", marginBottom:24 }}>
+            <div style={{ color:C.text, fontSize:14, fontWeight:600, fontFamily:F, marginBottom:12 }}>2. Sube el archivo aquí</div>
+            <label style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:C.card, border:`2px dashed ${file?C.accent:C.border}`, borderRadius:10, cursor:"pointer" }}>
+              <span style={{ fontSize:22 }}>📄</span>
+              <div>
+                <div style={{ color:file?C.accent:C.textDim, fontSize:13, fontFamily:F, fontWeight:500 }}>
+                  {file ? file.name : "Seleccionar archivo CSV"}
+                </div>
+                <div style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Formato BBVA · .csv</div>
+              </div>
+              <input type="file" accept=".csv" style={{ display:"none" }} onChange={e=>setFile(e.target.files[0])}/>
+            </label>
+          </div>
+          {err&&<div style={{ color:C.red, fontSize:12, fontFamily:F, marginBottom:14, padding:"10px 14px", background:C.redDim, borderRadius:8 }}>{err}</div>}
+          <button onClick={importar} disabled={!file||busy}
+            style={{ width:"100%", background:file?C.accent:C.border, border:"none", borderRadius:10, color:C.bg, padding:"13px", fontSize:14, fontWeight:600, cursor:file&&!busy?"pointer":"default", fontFamily:F, marginBottom:12 }}>
+            {busy?"Importando…":"Importar transacciones"}
+          </button>
+          <button onClick={onDone} style={{ width:"100%", background:"transparent", border:`1px solid ${C.border}`, borderRadius:10, color:C.textMuted, padding:"11px", fontSize:13, cursor:"pointer", fontFamily:F }}>
+            Configurar después — ir al dashboard
+          </button>
+        </> : <>
+          <div style={{ textAlign:"center", marginBottom:28 }}>
+            <div style={{ fontSize:48, marginBottom:16 }}>✅</div>
+            <div style={{ color:C.accent, fontSize:20, fontWeight:700, fontFamily:F, marginBottom:8 }}>¡Listo!</div>
+            <div style={{ color:C.textDim, fontSize:14, fontFamily:F }}>Tus datos están cargados</div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:28 }}>
+            {[
+              { lbl:"Transacciones importadas", val:result.transacciones, col:C.accent },
+              { lbl:"Planes MSI detectados",    val:result.msi,           col:C.yellow },
+            ].map(s=>(
+              <div key={s.lbl} style={{ background:C.surface, borderRadius:12, padding:"16px", textAlign:"center" }}>
+                <div style={{ color:s.col, fontSize:28, fontWeight:700, fontFamily:F }}>{s.val}</div>
+                <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginTop:4 }}>{s.lbl}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={onDone} style={{ width:"100%", background:C.accent, border:"none", borderRadius:10, color:C.bg, padding:"13px", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:F }}>
+            Ver mi dashboard
+          </button>
+        </>}
+      </div>
+    </div>
+  );
+}
+
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 function LoginScreen() {
   const [modo,setModo]=useState("login"); // "login" | "setup"
@@ -1112,23 +1195,29 @@ function Dashboard({ logout }) {
   const [prevSavings,setPrevSavings]=useState(PREV_SAVINGS_DEFAULT);
   const [loading,setLoading]=useState(true);
   const [apiError,setApiError]=useState(null);
+  const [onboarding,setOnboarding]=useState(false);
 
-  useEffect(()=>{
+  const cargarDatos=()=>{
     const periodo=periodoActual();
+    setLoading(true);
     Promise.all([
       API.getDashboard(periodo),
       API.getFijos(),
       API.getMSI(),
     ]).then(([dash,fijosData,msiData])=>{
-      if(dash.ingreso)           setIncome(Number(dash.ingreso));
-      if(dash.ultimasTransacciones?.length) setTxs(dash.ultimasTransacciones.map(mapApiTx));
-      if(fijosData.fijos?.length)           setFixedItems(fijosData.fijos.map(mapApiFijo));
-      if(msiData.msi?.length)               setMsiPlans(msiData.msi.map(mapApiMsi));
+      if(dash.ingreso) setIncome(Number(dash.ingreso));
+      const txsApi=dash.ultimasTransacciones||[];
+      if(txsApi.length) setTxs(txsApi.map(mapApiTx));
+      else setOnboarding(true);
+      if(fijosData.fijos?.length) setFixedItems(fijosData.fijos.map(mapApiFijo));
+      if(msiData.msi?.length)     setMsiPlans(msiData.msi.map(mapApiMsi));
     }).catch(err=>{
       console.error("ClarIA API:", err);
       setApiError(err.message);
     }).finally(()=>setLoading(false));
-  },[]);
+  };
+
+  useEffect(()=>{ cargarDatos(); },[]);
 
   const addTx=(tx)=>{
     setTxs(p=>[tx,...p]);
@@ -1141,6 +1230,8 @@ function Dashboard({ logout }) {
       fecha_operacion: tx.date,
     }).catch(err=>console.error("Error guardando en API:",err));
   };
+
+  if(onboarding) return <OnboardingScreen onDone={()=>{ setOnboarding(false); cargarDatos(); }}/>;
 
   const alerts=computeAlerts(txs,fixedItems,income,msiPlans);
   return (

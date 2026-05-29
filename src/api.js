@@ -37,4 +37,5 @@ export const deleteFijo     = (id) => req("DELETE", `/api/fijos/${id}`);
 export const getMSI         = () => req("GET", "/api/msi");
 export const getPresupuesto = () => req("GET", "/api/presupuesto");
 export const getTendencia   = (meses = 6) => req("GET", `/api/tendencia?meses=${meses}`);
+export const importCSV      = (csvText)   => req("POST", "/api/import/csv", { csv: csvText });
 export const health         = () => req("GET", "/health");
