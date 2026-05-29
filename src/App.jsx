@@ -476,10 +476,27 @@ function CardDetailModal({ card, txs, onClose }) {
 }
 
 // ── TRANSACTIONS ──────────────────────────────────────────────────────────────
+const TIPOS_EXCLUIR = ["pago","msi_cuota","abono_puntos","abono"];
+
 function Transactions({ txs, setTxs, onAdd }) {
   const [type,setType]=useState("all"); const [catF,setCatF]=useState("all");
   const [cardF,setCardF]=useState("all"); const [from,setFrom]=useState(""); const [to,setTo]=useState("");
   const [editTx,setEditTx]=useState(null); const [addingTx,setAddingTx]=useState(false);
+  const [cargando,setCargando]=useState(false);
+
+  useEffect(()=>{
+    setCargando(true);
+    API.getGastos({ limit:500 })
+      .then(rows=>{
+        const mapped=rows
+          .filter(t=>!TIPOS_EXCLUIR.includes(t.tipo))
+          .map(mapApiTx);
+        if(mapped.length) setTxs(mapped);
+      })
+      .catch(err=>console.error("Error cargando transacciones:",err))
+      .finally(()=>setCargando(false));
+  },[]);
+
   const cats=["all",...new Set(txs.map(t=>t.cat))];
   const list=txs.filter(t=>{
     if(type==="gastos"&&t.amt>=0)return false; if(type==="abonos"&&t.amt<0)return false;
@@ -537,7 +554,8 @@ function Transactions({ txs, setTxs, onAdd }) {
             </div>
           );
         })}
-        {list.length===0&&<div style={{ color:C.textMuted, fontSize:14, fontFamily:F, textAlign:"center", padding:"40px 0" }}>Sin transacciones con esos filtros</div>}
+        {cargando&&<div style={{ color:C.textMuted, fontSize:14, fontFamily:F, textAlign:"center", padding:"40px 0" }}>Cargando transacciones…</div>}
+        {!cargando&&list.length===0&&<div style={{ color:C.textMuted, fontSize:14, fontFamily:F, textAlign:"center", padding:"40px 0" }}>Sin transacciones con esos filtros</div>}
       </div>
       {(editTx||addingTx)&&<TxModal tx={editTx||{date:todayStr(),desc:"",amt:"",cat:"Comida",src:"manual",cardId:null}} onSave={saveTx} onClose={()=>{setEditTx(null);setAddingTx(false);}}/>}
     </div>
