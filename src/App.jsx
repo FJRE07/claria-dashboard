@@ -482,6 +482,8 @@ function Transactions({ txs, setTxs, onAdd }) {
   const [type,setType]=useState("all"); const [catF,setCatF]=useState("all");
   const [cardF,setCardF]=useState("all"); const [from,setFrom]=useState(""); const [to,setTo]=useState("");
   const [editTx,setEditTx]=useState(null); const [addingTx,setAddingTx]=useState(false);
+  // Estado local propio — no contamina el estado del padre (que es solo el mes actual)
+  const [localTxs,setLocalTxs]=useState(txs);
   const [cargando,setCargando]=useState(false);
 
   useEffect(()=>{
@@ -491,14 +493,14 @@ function Transactions({ txs, setTxs, onAdd }) {
         const mapped=rows
           .filter(t=>!TIPOS_EXCLUIR.includes(t.tipo))
           .map(mapApiTx);
-        if(mapped.length) setTxs(mapped);
+        if(mapped.length) setLocalTxs(mapped);
       })
       .catch(err=>console.error("Error cargando transacciones:",err))
       .finally(()=>setCargando(false));
   },[]);
 
-  const cats=["all",...new Set(txs.map(t=>t.cat))];
-  const list=txs.filter(t=>{
+  const cats=["all",...new Set(localTxs.map(t=>t.cat))];
+  const list=localTxs.filter(t=>{
     if(type==="gastos"&&t.amt>=0)return false; if(type==="abonos"&&t.amt<0)return false;
     if(catF!=="all"&&t.cat!==catF)return false;
     if(cardF==="sin"&&t.cardId!==null)return false;
@@ -506,8 +508,19 @@ function Transactions({ txs, setTxs, onAdd }) {
     if(from&&t.date<from)return false; if(to&&t.date>to)return false;
     return true;
   });
-  const saveTx=tx=>{ if(tx.id&&txs.find(t=>t.id===tx.id)) setTxs(p=>p.map(t=>t.id===tx.id?tx:t)); else onAdd(tx); };
-  const delTx=id=>{ if(confirm("¿Eliminar esta transacción?")) setTxs(p=>p.filter(t=>t.id!==id)); };
+  const saveTx=tx=>{
+    if(tx.id&&localTxs.find(t=>t.id===tx.id)){
+      setLocalTxs(p=>p.map(t=>t.id===tx.id?tx:t));
+      setTxs(p=>p.map(t=>t.id===tx.id?tx:t));
+    } else { onAdd(tx); setLocalTxs(p=>[tx,...p]); }
+  };
+  const delTx=id=>{
+    if(confirm("¿Eliminar esta transacción?")){
+      setLocalTxs(p=>p.filter(t=>t.id!==id));
+      setTxs(p=>p.filter(t=>t.id!==id));
+      API.deleteGasto(id).catch(console.error);
+    }
+  };
   const Fb=({val,cur,label,onClick})=><button onClick={onClick} style={{ padding:"5px 14px", borderRadius:99, fontSize:12, fontWeight:500, fontFamily:F, border:val===cur?"none":`1px solid ${C.border}`, background:val===cur?C.accent:"transparent", color:val===cur?C.bg:C.textDim, cursor:"pointer" }}>{label}</button>;
   const sel={ background:C.card, border:`1px solid ${C.border}`, color:C.text, borderRadius:8, padding:"5px 10px", fontSize:12, fontFamily:F, cursor:"pointer", outline:"none" };
   return (
