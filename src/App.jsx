@@ -482,9 +482,8 @@ function Transactions({ txs, setTxs, onAdd }) {
   const [type,setType]=useState("all"); const [catF,setCatF]=useState("all");
   const [cardF,setCardF]=useState("all"); const [from,setFrom]=useState(""); const [to,setTo]=useState("");
   const [editTx,setEditTx]=useState(null); const [addingTx,setAddingTx]=useState(false);
-  // Estado local propio — no contamina el estado del padre (que es solo el mes actual)
-  const [localTxs,setLocalTxs]=useState(txs);
-  const [cargando,setCargando]=useState(false);
+  const [localTxs,setLocalTxs]=useState([]);
+  const [cargando,setCargando]=useState(true);
 
   useEffect(()=>{
     setCargando(true);
@@ -493,9 +492,9 @@ function Transactions({ txs, setTxs, onAdd }) {
         const mapped=rows
           .filter(t=>!TIPOS_EXCLUIR.includes(t.tipo))
           .map(mapApiTx);
-        if(mapped.length) setLocalTxs(mapped);
+        setLocalTxs(mapped.length ? mapped : txs);
       })
-      .catch(err=>console.error("Error cargando transacciones:",err))
+      .catch(err=>{ console.error("Error cargando transacciones:",err); setLocalTxs(txs); })
       .finally(()=>setCargando(false));
   },[]);
 
@@ -545,30 +544,33 @@ function Transactions({ txs, setTxs, onAdd }) {
         <div>#ID</div><div/><div>Descripción</div><div>Fecha</div><div>Categoría</div><div style={{ textAlign:"right" }}>Monto</div><div style={{ textAlign:"center" }}>Tarjeta</div><div style={{ textAlign:"center" }}>Origen</div><div/>
       </div>
       <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-        {list.map((tx,i)=>{
-          const card=CARDS.find(c=>c.id===tx.cardId);
-          return (
-            <div key={tx.id} style={{ display:"grid", gridTemplateColumns:"44px 34px 1fr 78px 110px 96px 140px 72px 76px", padding:"11px 14px", background:C.card, border:`1px solid ${C.border}`, borderRadius:12, alignItems:"center", fontFamily:F, animation:`fadeIn .2s ease ${i*0.02}s both` }}>
-              <div style={{ color:C.textMuted, fontSize:10, fontFamily:"'IBM Plex Mono',monospace" }}>#{tx.id}</div>
-              <div style={{ fontSize:17 }}>{tx.icon}</div>
-              <div style={{ color:C.text, fontSize:13, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tx.desc}</div>
-              <div style={{ color:C.textDim, fontSize:12 }}>{new Date(tx.date+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</div>
-              <div><Chip color={tx.amt<0?C.red:C.accent} bg={tx.amt<0?C.redDim:C.accentDim}>{tx.cat}</Chip></div>
-              <div style={{ textAlign:"right", fontWeight:700, fontSize:13, color:tx.amt<0?C.red:C.accent, fontVariantNumeric:"tabular-nums" }}>{tx.amt<0?"−":"+"}{fmt(tx.amt)}</div>
-              <div style={{ textAlign:"center" }}>
-                {card?<span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:`${card.clr[0]}44`, color:"#fff", border:`1px solid ${card.clr[1]}55` }}>💳 {card.name}</span>
-                     :<span style={{ color:C.textMuted, fontSize:12 }}>—</span>}
-              </div>
-              <div style={{ textAlign:"center" }}><span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":C.blueDim, color:tx.src==="whatsapp"?C.wa:C.blue }}>{tx.src==="whatsapp"?"WA":"Man"}</span></div>
-              <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
-                <button onClick={()=>setEditTx(tx)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>✏️</button>
-                <button onClick={()=>delTx(tx.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>🗑</button>
-              </div>
-            </div>
-          );
-        })}
-        {cargando&&<div style={{ color:C.textMuted, fontSize:14, fontFamily:F, textAlign:"center", padding:"40px 0" }}>Cargando transacciones…</div>}
-        {!cargando&&list.length===0&&<div style={{ color:C.textMuted, fontSize:14, fontFamily:F, textAlign:"center", padding:"40px 0" }}>Sin transacciones con esos filtros</div>}
+        {cargando
+          ? <div style={{ color:C.textMuted, fontSize:14, fontFamily:F, textAlign:"center", padding:"60px 0" }}>Cargando transacciones…</div>
+          : list.length===0
+            ? <div style={{ color:C.textMuted, fontSize:14, fontFamily:F, textAlign:"center", padding:"40px 0" }}>Sin transacciones con esos filtros</div>
+            : list.map((tx,i)=>{
+                const card=CARDS.find(c=>c.id===tx.cardId);
+                return (
+                  <div key={tx.id} style={{ display:"grid", gridTemplateColumns:"44px 34px 1fr 78px 110px 96px 140px 72px 76px", padding:"11px 14px", background:C.card, border:`1px solid ${C.border}`, borderRadius:12, alignItems:"center", fontFamily:F, animation:`fadeIn .2s ease ${i*0.02}s both` }}>
+                    <div style={{ color:C.textMuted, fontSize:10, fontFamily:"'IBM Plex Mono',monospace" }}>#{tx.id}</div>
+                    <div style={{ fontSize:17 }}>{tx.icon}</div>
+                    <div style={{ color:C.text, fontSize:13, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tx.desc}</div>
+                    <div style={{ color:C.textDim, fontSize:12 }}>{new Date(tx.date+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</div>
+                    <div><Chip color={tx.amt<0?C.red:C.accent} bg={tx.amt<0?C.redDim:C.accentDim}>{tx.cat}</Chip></div>
+                    <div style={{ textAlign:"right", fontWeight:700, fontSize:13, color:tx.amt<0?C.red:C.accent, fontVariantNumeric:"tabular-nums" }}>{tx.amt<0?"−":"+"}{fmt(tx.amt)}</div>
+                    <div style={{ textAlign:"center" }}>
+                      {card?<span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:`${card.clr[0]}44`, color:"#fff", border:`1px solid ${card.clr[1]}55` }}>💳 {card.name}</span>
+                           :<span style={{ color:C.textMuted, fontSize:12 }}>—</span>}
+                    </div>
+                    <div style={{ textAlign:"center" }}><span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":C.blueDim, color:tx.src==="whatsapp"?C.wa:C.blue }}>{tx.src==="whatsapp"?"WA":"Man"}</span></div>
+                    <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
+                      <button onClick={()=>setEditTx(tx)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>✏️</button>
+                      <button onClick={()=>delTx(tx.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>🗑</button>
+                    </div>
+                  </div>
+                );
+              })
+        }
       </div>
       {(editTx||addingTx)&&<TxModal tx={editTx||{date:todayStr(),desc:"",amt:"",cat:"Comida",src:"manual",cardId:null}} onSave={saveTx} onClose={()=>{setEditTx(null);setAddingTx(false);}}/>}
     </div>
