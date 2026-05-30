@@ -1129,224 +1129,211 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
       : null,
   ].filter(Boolean);
 
-  // Top 5 categorías de gasto + Otros
-  const spentByCat = txs.filter(t=>t.amt<0&&t.cat!=="Ahorro").reduce((acc,tx)=>{ acc[tx.cat]=(acc[tx.cat]||0)+Math.abs(tx.amt); return acc; },{});
-  const sortedCats = Object.entries(spentByCat).sort((a,b)=>b[1]-a[1]);
-  const top5       = sortedCats.slice(0,5);
-  const otrosTotal = sortedCats.slice(5).reduce((s,[,v])=>s+v, 0);
-  const DIST_PALETTE = [C.red,C.blue,C.accent,C.yellow,C.purple];
-  const distData = [
-    ...top5.map(([cat,val],i)=>({ name:cat, value:val, color:EXP_COLORS[cat]||DIST_PALETTE[i] })),
-    ...(otrosTotal>0?[{ name:"Otros", value:otrosTotal, color:C.textDim }]:[]),
-  ];
-
-  // Top 5 categorías del histórico + Otros
-  const histAmounts = {};
-  for (const row of EXPENSE_TREND_RAW) {
-    for (const [k,v] of Object.entries(row)) { if(k!=='m') histAmounts[k]=(histAmounts[k]||0)+v; }
-  }
-  const TOP_HIST = Object.entries(histAmounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([c])=>c);
-  const HIST_COLORS = Object.fromEntries(TOP_HIST.map((c,i)=>[c, EXP_COLORS[c]||DIST_PALETTE[i]]));
-  const histTrend = EXPENSE_TREND_RAW.map(row=>{
-    const otros = Object.entries(row).filter(([k])=>k!=='m'&&!TOP_HIST.includes(k)).reduce((s,[,v])=>s+v,0);
-    const r = { m:row.m };
-    TOP_HIST.forEach(c=>{ r[c]=row[c]||0; });
-    if(otros>0) r['Otros']=otros;
-    return r;
-  });
-  const histCats = [...TOP_HIST, ...(histTrend.some(r=>r['Otros']>0)?['Otros']:[])];
+  const diasCorte = cards.length>0 ? Math.min(...cards.map(c=>daysTo(c.cut))) : null;
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
 
-      {/* ── 1. SCORE + ALERTAS ───────────────────────────────────────────── */}
-      <SCard style={{ padding:"20px 24px" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:24 }}>
-          {/* Score */}
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}>
+      {/* ── 1. KPI BAR ───────────────────────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
+        {[
+          { lbl:"Ingreso mensual",  val:fmt(INCOME),                                      col:C.accent },
+          { lbl:"Gastos fijos",     val:fmt(totalFixed),                                  col:C.red    },
+          { lbl:"MSI / mes",        val:fmt(totalMSI),                                    col:C.yellow },
+          { lbl:"Gastado variable", val:fmt(gastoVar),                                    col:C.blue   },
+          { lbl:"Libre",            val:fmt(Math.max(0,INCOME-committed-gastoVar)),        col:INCOME-committed-gastoVar<0?C.red:C.accent },
+        ].map(k=>(
+          <div key={k.lbl} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"10px 14px", display:"flex", flexDirection:"column", gap:3 }}>
+            <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>{k.lbl}</span>
+            <span style={{ color:k.col, fontSize:20, fontWeight:700, fontFamily:F, lineHeight:1.1 }}>{k.val}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── 2. SCORE FINANCIERO ──────────────────────────────────────────── */}
+      <SCard style={{ padding:12 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr auto", gap:0, alignItems:"center" }}>
+
+          {/* Gauge izquierda */}
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:2, paddingRight:20, borderRight:`1px solid ${C.border}`, minWidth:130 }}>
             <ScoreGauge score={score}/>
-            <div style={{ textAlign:"center" }}>
-              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>Score financiero</div>
-              <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:15, fontWeight:700, fontFamily:F }}>
-                {score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100
-              </div>
+            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginTop:-4 }}>Score financiero</div>
+            <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:13, fontWeight:700, fontFamily:F }}>
+              {score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100
             </div>
           </div>
-          {/* Alertas */}
-          <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:24 }}>
-            <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:12 }}>Alertas financieras</div>
+
+          {/* Alertas centro */}
+          <div style={{ padding:"0 20px", borderRight:`1px solid ${C.border}` }}>
+            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Alertas financieras</div>
             {alertsEstado.length===0
-              ? <div style={{ color:C.accent, fontSize:13, fontFamily:F }}>✅ Todo bajo control</div>
-              : <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              ? <div style={{ color:C.accent, fontSize:12, fontFamily:F }}>Todo bajo control</div>
+              : <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                   {alertsEstado.map((a,i)=>{
-                    const col = a.type==="danger"?C.red:a.type==="warn"?C.yellow:C.blue;
+                    const col=a.type==="danger"?C.red:a.type==="warn"?C.yellow:C.blue;
                     return (
-                      <div key={i} style={{ borderLeft:`3px solid ${col}`, paddingLeft:10, background:`${col}10`, borderRadius:"0 8px 8px 0", padding:"8px 12px" }}>
-                        <div style={{ color:C.text, fontSize:12, fontFamily:F, fontWeight:600 }}>{a.msg}</div>
-                        <div style={{ color:C.textDim, fontSize:11, fontFamily:F, marginTop:2 }}>{a.sub}</div>
+                      <div key={i} style={{ borderLeft:`3px solid ${col}`, background:`${col}10`, borderRadius:"0 6px 6px 0", padding:"5px 10px" }}>
+                        <div style={{ color:C.text, fontSize:11, fontFamily:F, fontWeight:600 }}>{a.msg}</div>
+                        <div style={{ color:C.textDim, fontSize:10, fontFamily:F }}>{a.sub}</div>
                       </div>
                     );
                   })}
                 </div>
             }
           </div>
+
+          {/* 3 métricas derecha */}
+          <div style={{ display:"flex", flexDirection:"column", gap:10, paddingLeft:20, minWidth:150 }}>
+            {[
+              { lbl:"Disponible TDC",  val:totLim>0?fmt(totLim-totUsed):"—",      col:creditUtil>0.50?C.red:C.accent },
+              { lbl:"% comprometido",  val:`${Math.round(committedR*100)}%`,        col:committedR>0.65?C.red:committedR>0.35?C.yellow:C.accent },
+              { lbl:"Días p/ corte",   val:diasCorte!=null?`${diasCorte} días`:"—", col:diasCorte!=null&&diasCorte<=5?C.red:C.textDim },
+            ].map(m=>(
+              <div key={m.lbl}>
+                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.07em" }}>{m.lbl}</div>
+                <div style={{ color:m.col, fontSize:17, fontWeight:700, fontFamily:F, lineHeight:1.2 }}>{m.val}</div>
+              </div>
+            ))}
+          </div>
+
         </div>
       </SCard>
 
-      {/* ── 2. HERO ──────────────────────────────────────────────────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
-        {[
-          { lbl:"Ingreso mensual",           val:fmt(INCOME),              col:C.accent },
-          { lbl:"Gastos fijos del mes",       val:fmt(totalFixed),          col:C.red,    sub:`${INCOME>0?Math.round(totalFixed/INCOME*100):0}% del ingreso` },
-          { lbl:"Comprometido en MSI",        val:fmt(totalMSI),            col:C.yellow, sub:`${INCOME>0?Math.round(totalMSI/INCOME*100):0}% del ingreso/mes` },
-          { lbl:"Presupuesto libre",          val:fmt(Math.max(0,librePresup)), col:librePresup<0?C.red:C.blue, sub:`Gasto variable: ${fmt(gastoVar)} de ${fmt(totalPresup)}` },
-        ].map(m=>(
-          <SCard key={m.lbl} style={{ padding:"16px 20px" }}>
-            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{m.lbl}</div>
-            <div style={{ color:m.col, fontSize:22, fontWeight:700, fontFamily:F, marginBottom:3 }}>{m.val}</div>
-            {m.sub&&<div style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{m.sub}</div>}
-          </SCard>
-        ))}
-      </div>
+      {/* ── 3. DOS COLUMNAS: PRESUPUESTO vs REAL · CUOTAS MSI ────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
 
-      {/* ── 3. PLANEACIÓN FINANCIERA ─────────────────────────────────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-
-        {/* Ahorro */}
-        <SCard style={{ padding:"20px 22px" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-            <button
-              onClick={()=>{ setGoalInput(String(savingsGoalPct)); setEditingGoal(v=>!v); }}
-              title="Editar meta de ahorro"
-              style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:7, color:C.textMuted, cursor:"pointer", fontSize:13, padding:"2px 7px", lineHeight:1, flexShrink:0 }}>
-              ✏️
-            </button>
-            <span style={{ color:C.textMuted, fontSize:11, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em" }}>Ahorro acumulado</span>
-          </div>
-          {editingGoal&&(
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:10, border:`1px solid ${C.accentGlow}` }}>
-              <span style={{ color:C.textDim, fontSize:12, fontFamily:F, whiteSpace:"nowrap" }}>Meta mínima de ahorro:</span>
-              <input
-                type="number" min="1" max="100" value={goalInput}
-                onChange={e=>setGoalInput(e.target.value)}
-                style={{ ...IS, width:70, padding:"4px 8px", fontSize:13, textAlign:"center" }}
-              />
-              <span style={{ color:C.textDim, fontSize:12, fontFamily:F }}>%</span>
-              <button
-                onClick={()=>{ const v=parseFloat(goalInput); if(!isNaN(v)&&v>0&&v<=100) setSavingsGoalPct(v); setEditingGoal(false); }}
-                style={{ ...BtnP, padding:"4px 12px", fontSize:12, flexShrink:0 }}>
-                OK
-              </button>
-            </div>
-          )}
-          <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
-            <span style={{ color:C.accent, fontSize:28, fontWeight:700, fontFamily:F }}>{fmt(prevSavings+thisMoSavings)}</span>
-            <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>total</span>
-          </div>
-          <div style={{ marginBottom:14 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-              <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Meta {savingsGoalPct}% ({fmt(INCOME*savingsGoalPct/100)}/mes)</span>
-              <span style={{ color:savR>=savingsGoalPct/100?C.accent:savR>savingsGoalPct/200?C.yellow:C.red, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(savR*100)}%</span>
-            </div>
-            <ProgressBar value={thisMoSavings} max={INCOME*savingsGoalPct/100||1} color={C.accent} h={6}/>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
-            {[
-              { lbl:"Este mes",        val:fmt(thisMoSavings), col:C.blue  },
-              { lbl:"Acum. anterior",  val:fmt(prevSavings),   col:C.textDim },
-              { lbl:"Posible ahorro",  val:fmt(posibleAhorro), col:C.accent },
-            ].map(s=>(
-              <div key={s.lbl} style={{ background:C.surface, borderRadius:10, padding:"10px 12px" }}>
-                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:4 }}>{s.lbl}</div>
-                <div style={{ color:s.col, fontSize:14, fontWeight:700, fontFamily:F }}>{s.val}</div>
+        {/* Presupuesto vs Gasto Real */}
+        <SCard style={{ padding:12 }}>
+          <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Presupuesto vs Gasto Real</div>
+          {PRIORITIES.map(p=>{
+            const budget=groupBudgets[p]||0, real=spentByGroup[p]||0;
+            const pct=budget>0?Math.min((real/budget)*100,100):0;
+            const exceeds=budget>0&&real>budget;
+            return (
+              <div key={p} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:3 }}>
+                  <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{p}</span>
+                  <div style={{ display:"flex", gap:5, alignItems:"baseline" }}>
+                    <span style={{ color:exceeds?C.red:C.accent, fontSize:12, fontFamily:F, fontWeight:700 }}>{fmt(real)}</span>
+                    <span style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>/ {fmt(budget)}</span>
+                  </div>
+                </div>
+                <div style={{ height:7, background:C.border, borderRadius:99, overflow:"hidden" }}>
+                  <div style={{ width:`${pct}%`, height:"100%", background:exceeds?C.red:C.accent, borderRadius:99, transition:"width 0.5s ease" }}/>
+                </div>
+                {exceeds&&<div style={{ color:C.red, fontSize:10, fontFamily:F, marginTop:2 }}>Excedido {fmt(real-budget)}</div>}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </SCard>
 
-        {/* Crédito */}
-        <SCard style={{ padding:"20px 22px" }}>
-          <Label>Utilización del crédito</Label>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
-            {[
-              { lbl:"Deuda total en tarjetas", val:fmt(totUsed), col:C.red,    sub:totLim>0?`de ${fmt(totLim)} límite`:"Sin tarjetas" },
-              { lbl:"Comprometido en MSI",     val:fmt(totalMSI)+"/mes", col:C.yellow, sub:`${INCOME>0?Math.round(totalMSI/INCOME*100):0}% del ingreso` },
-            ].map(s=>(
-              <div key={s.lbl} style={{ background:C.surface, borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:6 }}>{s.lbl}</div>
-                <div style={{ color:s.col, fontSize:16, fontWeight:700, fontFamily:F }}>{s.val}</div>
-                <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginTop:2 }}>{s.sub}</div>
-              </div>
-            ))}
-          </div>
-          {totLim>0&&<>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-              <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Utilización global</span>
-              <span style={{ color:creditUtil>0.50?C.red:creditUtil>0.30?C.yellow:C.accent, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(creditUtil*100)}%</span>
-            </div>
-            <ProgressBar value={totUsed} max={totLim} h={6}/>
-          </>}
-          {msiAvgMonths>0&&<div style={{ marginTop:14, padding:"10px 14px", background:C.yellowDim, borderRadius:10, border:`1px solid ${C.yellow}30` }}>
-            <div style={{ color:C.yellow, fontSize:12, fontFamily:F, fontWeight:600 }}>En promedio tienes el {Math.round(totalMSI/Math.max(INCOME,1)*100)}% del ingreso comprometido en MSI los próximos ~{msiAvgMonths} meses</div>
-          </div>}
+        {/* Cuotas MSI Activas */}
+        <SCard style={{ padding:12, display:"flex", flexDirection:"column" }}>
+          <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Cuotas MSI Activas</div>
+          {msiPlans.length===0
+            ? <div style={{ color:C.textMuted, fontSize:12, fontFamily:F, flex:1, display:"flex", alignItems:"center" }}>Sin planes MSI activos</div>
+            : <>
+                <div style={{ display:"flex", flexDirection:"column", gap:7, flex:1 }}>
+                  {msiPlans.map(plan=>{
+                    const pct=(plan.paid/plan.months)*100;
+                    const end=new Date(plan.start); end.setMonth(end.getMonth()+plan.months);
+                    const saldo=plan.total-plan.paid*plan.mo;
+                    return (
+                      <div key={plan.id} style={{ padding:"8px 10px", background:C.surface, borderRadius:10, border:`1px solid ${C.border}` }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
+                          <span style={{ color:C.text, fontSize:12, fontFamily:F, fontWeight:600 }}>{plan.name}</span>
+                          <span style={{ color:C.yellow, fontSize:12, fontFamily:F, fontWeight:700 }}>{fmt(plan.mo)}/mes</span>
+                        </div>
+                        <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, marginBottom:5 }}>
+                          {plan.paid}/{plan.months} pagos · vence {end.toLocaleDateString("es-MX",{month:"short",year:"2-digit"})} · saldo {fmt(saldo)}
+                        </div>
+                        <div style={{ height:4, background:C.border, borderRadius:99, overflow:"hidden" }}>
+                          <div style={{ width:`${pct}%`, height:"100%", background:C.blue, borderRadius:99 }}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop:8, padding:"8px 10px", background:C.yellowDim, border:`1px solid ${C.yellow}30`, borderRadius:10, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>Total mensual</span>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ color:C.yellow, fontSize:14, fontWeight:700, fontFamily:F }}>{fmt(totalMSI)}/mes</div>
+                    <div style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>saldo total {fmt(msiPlans.reduce((s,p)=>s+(p.total-p.paid*p.mo),0))}</div>
+                  </div>
+                </div>
+              </>
+          }
         </SCard>
       </div>
 
-      {/* ── 4. DISTRIBUCIÓN DE GASTOS — por categoría */}
-      <SCard>
-        <Label>Distribución de gastos por categoría</Label>
-        {(() => {
-          const catData = Object.entries(spentByCat)
-            .sort((a,b)=>b[1]-a[1])
-            .map(([cat,val])=>({ cat, val, color: EXP_COLORS[cat]||C.purple }));
-          if(!catData.length) return <div style={{ color:C.textMuted, fontSize:13, fontFamily:F, padding:"20px 0" }}>Sin gastos registrados este mes</div>;
+      {/* ── 4. RESUMEN DE AHORROS ────────────────────────────────────────── */}
+      <SCard style={{ padding:12 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+          <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em" }}>Resumen de Ahorros</div>
+          <button
+            onClick={()=>{ setGoalInput(String(savingsGoalPct)); setEditingGoal(v=>!v); }}
+            style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textMuted, cursor:"pointer", fontSize:11, padding:"2px 8px", fontFamily:F }}>
+            Meta {savingsGoalPct}% ✏️
+          </button>
+        </div>
+        {editingGoal&&(
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, padding:"6px 10px", background:C.accentDim, borderRadius:8, border:`1px solid ${C.accentGlow}` }}>
+            <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>Meta mínima:</span>
+            <input type="number" min="1" max="100" value={goalInput} onChange={e=>setGoalInput(e.target.value)}
+              style={{ ...IS, width:60, padding:"2px 6px", fontSize:12, textAlign:"center" }}/>
+            <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>%</span>
+            <button onClick={()=>{ const v=parseFloat(goalInput); if(!isNaN(v)&&v>0&&v<=100)setSavingsGoalPct(v); setEditingGoal(false); }}
+              style={{ ...BtnP, padding:"3px 10px", fontSize:11 }}>OK</button>
+          </div>
+        )}
+        {/* 3 KPIs */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:10 }}>
+          {[
+            { lbl:"Acumulado total",      val:fmt(prevSavings+thisMoSavings), col:C.accent },
+            { lbl:"Ahorro fijo este mes", val:fmt(thisMoSavings),             col:C.blue   },
+            { lbl:"Posible ahorro extra", val:fmt(posibleAhorro),             col:C.purple },
+          ].map(k=>(
+            <div key={k.lbl} style={{ background:C.surface, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:4 }}>{k.lbl}</div>
+              <div style={{ color:k.col, fontSize:18, fontWeight:700, fontFamily:F }}>{k.val}</div>
+            </div>
+          ))}
+        </div>
+        {/* Desglose fila por fila */}
+        {(()=>{
+          const excedente=Math.max(0,INCOME-committed-gastoVar);
+          const ahorroAdicional=Math.round(excedente*0.5);
+          const metaAmt=Math.round(INCOME*savingsGoalPct/100);
+          const ahorroTotal=thisMoSavings+ahorroAdicional;
+          const pctMeta=metaAmt>0?Math.min((ahorroTotal/metaAmt)*100,100):0;
+          const barCol=pctMeta>=100?C.accent:pctMeta>=60?C.yellow:C.red;
           return (
             <>
-              <div style={{ display:"flex", gap:14, marginBottom:14, flexWrap:"wrap" }}>
-                {catData.map(d=>(
-                  <div key={d.cat} style={{ display:"flex", alignItems:"center", gap:5 }}>
-                    <div style={{ width:8, height:8, borderRadius:"50%", background:d.color }}/>
-                    <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{d.cat}</span>
+              <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:10 }}>
+                {[
+                  { lbl:"Ahorro fijo del mes",               val:thisMoSavings,    col:C.blue   },
+                  { lbl:"Excedente libre",                   val:excedente,        col:C.accent },
+                  { lbl:"Posible ahorro adicional (×50%)",   val:ahorroAdicional,  col:C.purple },
+                  { lbl:`Meta mensual (${savingsGoalPct}%)`, val:metaAmt,          col:C.yellow },
+                ].map(r=>(
+                  <div key={r.lbl} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"5px 8px", background:C.surface, borderRadius:7 }}>
+                    <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{r.lbl}</span>
+                    <span style={{ color:r.col, fontSize:12, fontWeight:700, fontFamily:F }}>{fmt(r.val)}</span>
                   </div>
                 ))}
               </div>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={catData} barCategoryGap="32%" margin={{ top:0, right:10, bottom:0, left:0 }}>
-                  <XAxis dataKey="cat" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
-                  <Tooltip cursor={{ fill:`${C.border}44` }} contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, fontFamily:F, fontSize:12, color:C.text }} formatter={v=>[fmt(v),"Gastado"]}/>
-                  <Bar dataKey="val" name="Gastado" radius={[4,4,0,0]}>
-                    {catData.map((d,i)=><Cell key={i} fill={d.color}/>)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Progreso hacia meta {savingsGoalPct}%</span>
+                <span style={{ color:barCol, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(pctMeta)}%</span>
+              </div>
+              <div style={{ height:8, background:C.border, borderRadius:99, overflow:"hidden" }}>
+                <div style={{ width:`${pctMeta}%`, height:"100%", background:barCol, borderRadius:99, transition:"width 0.7s ease" }}/>
+              </div>
             </>
           );
         })()}
       </SCard>
 
-      {/* ── 5. HISTÓRICO MENSUAL (top 5 + Otros) ────────────────────────── */}
-      <SCard>
-        <Label>Histórico de gastos mensual</Label>
-        <div style={{ display:"flex", gap:14, marginBottom:16, flexWrap:"wrap" }}>
-          {histCats.map(cat=><div key={cat} style={{ display:"flex", alignItems:"center", gap:5 }}>
-            <div style={{ width:8, height:8, borderRadius:"50%", background:HIST_COLORS[cat]||C.textDim }}/>
-            <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{cat}</span>
-          </div>)}
-        </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={histTrend} barCategoryGap="30%" margin={{ top:0, right:16, bottom:0, left:0 }}>
-            <XAxis dataKey="m" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
-            <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
-            <Tooltip cursor={{ fill:"transparent" }} contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, fontFamily:F, fontSize:12, color:C.text }}/>
-            {histCats.map((cat,i)=>(
-              <Bar key={cat} dataKey={cat} name={cat} stackId="a"
-                fill={HIST_COLORS[cat]||C.textDim} maxBarSize={64}
-                radius={i===histCats.length-1?[4,4,0,0]:[0,0,0,0]}/>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </SCard>
     </div>
   );
 }
