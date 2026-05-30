@@ -860,8 +860,21 @@ function FixedExpenses({ items, setItems, income }) {
   const pieDat=PRIORITIES.map(p=>({ name:p, value:byPri[p]||0, color:PM[p].color }));
   const catCol={ Vivienda:C.blue, Entretenimiento:C.purple, Salud:C.accent, Tecnología:C.teal, Servicios:C.yellow, Otros:C.textDim };
 
-  const saveItem=item=>{ if(item.id&&items.find(i=>i.id===item.id)) setItems(p=>p.map(i=>i.id===item.id?item:i)); else setItems(p=>[...p,item]); };
-  const delItem=id=>{ if(confirm("¿Eliminar este gasto fijo?")) setItems(p=>p.filter(i=>i.id!==id)); };
+  const saveItem=async(item)=>{
+    const payload={ detalle:item.name, monto:item.amt, grupo:item.cat, icono:item.icon, dia_cobro:item.day };
+    if(item.id&&items.find(i=>i.id===item.id)){
+      const updated=await API.putFijo(item.id, payload).catch(console.error);
+      if(updated) setItems(p=>p.map(i=>i.id===item.id?mapApiFijo(updated,0):i));
+    } else {
+      const created=await API.postFijo(payload).catch(console.error);
+      if(created) setItems(p=>[...p, mapApiFijo(created, p.length)]);
+    }
+  };
+  const delItem=async(id)=>{
+    if(!confirm("¿Eliminar este gasto fijo?"))return;
+    await API.deleteFijo(id).catch(console.error);
+    setItems(p=>p.filter(i=>i.id!==id));
+  };
 
   return (
     <div>
