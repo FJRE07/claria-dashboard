@@ -829,7 +829,7 @@ function FixedExpenses({ items, setItems, income }) {
 }
 
 // ── MSI ───────────────────────────────────────────────────────────────────────
-function MSIPlans({ plans }) {
+function MSIPlans({ plans, cards }) {
   const totalMo=plans.reduce((s,p)=>s+p.mo,0), totalDebt=plans.reduce((s,p)=>s+(p.total-p.paid*p.mo),0);
   return (
     <div>
@@ -844,7 +844,7 @@ function MSIPlans({ plans }) {
       {plans.map(plan=>{
         const pct=(plan.paid/plan.months)*100, rem=plan.total-plan.paid*plan.mo;
         const next=new Date(plan.start); next.setMonth(next.getMonth()+plan.paid+1);
-        const card=CARDS.find(c=>c.id===plan.cardId);
+        const card=cards.find(c=>c.id===plan.cardId);
         return (
           <SCard key={plan.id} style={{ marginBottom:16 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
@@ -881,7 +881,7 @@ function MSIPlans({ plans }) {
 }
 
 // ── ESTADO — priority cards first, score with factor breakdown ────────────────
-function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings }) {
+function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards }) {
   const INCOME=income;
   const totalFixed=fixedItems.reduce((s,f)=>s+f.amt,0);
   const totalMSI=msiPlans.reduce((s,p)=>s+p.mo,0);
@@ -890,8 +890,8 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings }
   const savRate=Math.round((free/INCOME)*100);
   const thisMoSavings=txs.filter(t=>t.cat==="Ahorro").reduce((s,t)=>s+Math.abs(t.amt),0);
   const savR=thisMoSavings/INCOME;
-  const totUsed=CARDS.reduce((s,c)=>s+c.used,0), totLim=CARDS.reduce((s,c)=>s+c.lim,0);
-  const creditUtil=(totUsed/totLim);
+  const totUsed=cards.reduce((s,c)=>s+c.used,0), totLim=cards.reduce((s,c)=>s+c.lim,0);
+  const creditUtil=totLim>0?(totUsed/totLim):0;
   const committedR=(totalFixed+totalMSI)/INCOME;
 
   const spentByGroup=txs.reduce((acc,tx)=>{ if(tx.amt>=0)return acc; const g=CAT_GROUP[tx.cat]; if(!g)return acc; acc[g]=(acc[g]||0)+Math.abs(tx.amt); return acc; },{});
@@ -1532,10 +1532,10 @@ function Dashboard({ logout }) {
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textDim;}}>⏻</button>
         </header>
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px" }}>
-          {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings}/>}
+          {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}/>}
           {tab==="fixed"        &&<FixedExpenses items={fixedItems} setItems={setFixedItems} income={income}/>}
           {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans}/>}
-          {tab==="msi"          &&<MSIPlans      plans={msiPlans}/>}
+          {tab==="msi"          &&<MSIPlans      plans={msiPlans} cards={cards}/>}
           {tab==="budget"       &&<Budget        groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income}/>}
           {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards}/>}
         </div>
