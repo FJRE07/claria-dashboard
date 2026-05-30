@@ -153,18 +153,23 @@ const FIXED_DEFAULT = [
 ];
 const MSI_DEFAULT = [];
 const CARD_COLOR_PRESETS = [
-  ["#002C7A","#0058C8"],
-  ["#880000","#CC1E00"],
-  ["#003F6B","#006EA8"],
-  ["#1A4731","#276749"],
-  ["#2D1B69","#5B2D8E"],
+  ["#002C7A","#0058C8"], // Azul
+  ["#1A1A2E","#16213E"], // Negro
+  ["#880000","#CC1E00"], // Rojo
+  ["#003F6B","#006EA8"], // Índigo
+  ["#1A4731","#276749"], // Verde
+  ["#2D1B69","#5B2D8E"], // Morado
+  ["#7B3F00","#C06000"], // Dorado
+  ["#0D3B4E","#1A6A8A"], // Teal
 ];
+const CARD_EMOJI_PRESETS = ["💳","🏦","💎","⭐","🌟","🔵","🔴","🟣","🟢","⚡","🌊","🔥","🏆","✨","🪙","💰"];
 const mapApiCard = (c) => ({
   id: c.id, name: c.nombre, bank: c.banco,
   clr: [c.color_inicio||"#002C7A", c.color_fin||"#0058C8"],
   last4: c.last4, lim: Number(c.limite),
   used: Number(c.saldo_usado||0),
   cut: Number(c.dia_corte), pay: Number(c.dia_pago),
+  icon: c.icono||"💳",
 });
 let _txId = 200;
 const PREV_SAVINGS_DEFAULT = 16500;
@@ -533,10 +538,11 @@ function ImportModal({ card, onDone, onClose }) {
 function CardModal({ card, onSave, onClose }) {
   const isNew=!card.id;
   const [d,setD]=useState({
-    nombre: card.nombre||"", banco: card.banco||"BBVA", last4: card.last4||"",
+    nombre: card.nombre||"", banco: card.banco||"", last4: card.last4||"",
     limite: card.limite!=null?String(card.limite):"", saldo_usado: card.saldo_usado!=null?String(card.saldo_usado):"0",
     dia_corte: card.dia_corte||15, dia_pago: card.dia_pago||10,
     color_inicio: card.color_inicio||"#002C7A", color_fin: card.color_fin||"#0058C8",
+    icono: card.icono||"💳",
   });
   const [busy,setBusy]=useState(false);
   const [analizando,setAnalizando]=useState(false);
@@ -614,12 +620,24 @@ function CardModal({ card, onSave, onClose }) {
           <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Día límite de pago</div><input type="number" min="1" max="31" value={d.dia_pago} onChange={e=>setD(p=>({...p,dia_pago:parseInt(e.target.value)||10}))} style={IS}/></div>
         </div>
 
+        <div style={{ marginBottom:14 }}>
+          <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:8 }}>Ícono de la tarjeta</div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            {CARD_EMOJI_PRESETS.map(e=>(
+              <div key={e} onClick={()=>setD(p=>({...p,icono:e}))}
+                style={{ width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, cursor:"pointer", background:d.icono===e?C.accentDim:C.card, border:d.icono===e?`2px solid ${C.accent}`:`1px solid ${C.border}`, transition:"border 0.15s" }}>
+                {e}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div style={{ marginBottom:18 }}>
           <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:8 }}>Color de la tarjeta</div>
-          <div style={{ display:"flex", gap:8 }}>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             {CARD_COLOR_PRESETS.map(([c1,c2])=>(
               <div key={c1} onClick={()=>setD(p=>({...p,color_inicio:c1,color_fin:c2}))}
-                style={{ width:40, height:24, borderRadius:7, background:`linear-gradient(135deg,${c1},${c2})`, cursor:"pointer", border:d.color_inicio===c1?`2px solid ${C.accent}`:`2px solid transparent`, transition:"border 0.15s" }}/>
+                style={{ width:36, height:22, borderRadius:7, background:`linear-gradient(135deg,${c1},${c2})`, cursor:"pointer", border:d.color_inicio===c1?`2px solid ${C.accent}`:`2px solid transparent`, transition:"border 0.15s" }}/>
             ))}
           </div>
         </div>
@@ -743,6 +761,18 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, onImportDone }) {
   const [editCard,setEditCard]=useState(null);
   const [adding,setAdding]=useState(false);
   const [importCard,setImportCard]=useState(null);
+  const [resetting,setResetting]=useState(false);
+
+  const handleReset=async()=>{
+    if(!confirm("⚠️ ¿Borrar TODAS las transacciones, planes MSI y tarjetas?\nEsta acción no se puede deshacer.")) return;
+    if(!confirm("Confirma una vez más: se borrarán todos los datos financieros de tu cuenta.")) return;
+    setResetting(true);
+    try{
+      await API.resetDatos();
+      setCards([]); setTxs([]);
+    } catch(e){ console.error("Error al resetear:",e); }
+    finally{ setResetting(false); }
+  };
 
   const totUsed=cards.reduce((s,c)=>s+c.used,0), totLim=cards.reduce((s,c)=>s+c.lim,0);
 
@@ -783,8 +813,8 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, onImportDone }) {
                   <div onClick={()=>setSelected(c)} style={{ background:`linear-gradient(135deg,${c.clr[0]},${c.clr[1]})`, padding:"24px 28px 20px", position:"relative", overflow:"hidden", cursor:"pointer" }}>
                     <div style={{ position:"absolute", right:-24, top:-24, width:110, height:110, borderRadius:"50%", background:"rgba(255,255,255,0.05)" }}/>
                     <div style={{ display:"flex", justifyContent:"space-between" }}>
-                      <div><div style={{ color:"rgba(255,255,255,0.55)", fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.12em" }}>{c.bank}</div><div style={{ color:"#fff", fontSize:17, fontWeight:700, fontFamily:F, marginTop:4 }}>{c.name}</div></div>
-                      <div style={{ color:"rgba(255,255,255,0.8)", fontSize:26 }}>💳</div>
+                      <div><div style={{ color:"rgba(255,255,255,0.55)", fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.12em" }}>{c.bank||"Banco"}</div><div style={{ color:"#fff", fontSize:17, fontWeight:700, fontFamily:F, marginTop:4 }}>{c.name}</div></div>
+                      <div style={{ color:"rgba(255,255,255,0.8)", fontSize:26 }}>{c.icon||"💳"}</div>
                     </div>
                     <div style={{ color:"rgba(255,255,255,0.45)", fontSize:14, fontFamily:F, marginTop:18, letterSpacing:"0.18em" }}>•••• •••• •••• {c.last4}</div>
                     <div style={{ display:"flex", justifyContent:"space-between", marginTop:18 }}>
@@ -834,7 +864,7 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, onImportDone }) {
       }
       {selected&&<CardDetailModal card={selected} txs={txs} msiPlans={msiPlans} onClose={()=>setSelected(null)}/>}
       {(adding||editCard)&&<CardModal
-        card={editCard?{id:editCard.id,nombre:editCard.name,banco:editCard.bank,last4:editCard.last4,limite:editCard.lim,saldo_usado:editCard.used,dia_corte:editCard.cut,dia_pago:editCard.pay,color_inicio:editCard.clr[0],color_fin:editCard.clr[1]}:{}}
+        card={editCard?{id:editCard.id,nombre:editCard.name,banco:editCard.bank,last4:editCard.last4,limite:editCard.lim,saldo_usado:editCard.used,dia_corte:editCard.cut,dia_pago:editCard.pay,color_inicio:editCard.clr[0],color_fin:editCard.clr[1],icono:editCard.icon}:{}}
         onSave={saveCard}
         onClose={()=>{setAdding(false);setEditCard(null);}}
       />}
@@ -843,6 +873,18 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, onImportDone }) {
         onDone={()=>{ setImportCard(null); onImportDone(); }}
         onClose={()=>setImportCard(null)}
       />}
+
+      {/* Zona de peligro */}
+      <div style={{ marginTop:24, padding:"16px 20px", background:C.redDim, border:`1px solid ${C.red}30`, borderRadius:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div>
+          <div style={{ color:C.red, fontSize:13, fontWeight:600, fontFamily:F }}>Limpiar todos mis datos</div>
+          <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginTop:2 }}>Borra transacciones, planes MSI y tarjetas. No se puede deshacer.</div>
+        </div>
+        <button onClick={handleReset} disabled={resetting}
+          style={{ ...BtnS, color:C.red, borderColor:C.red+"55", fontSize:12, padding:"6px 16px", opacity:resetting?0.5:1, flexShrink:0 }}>
+          {resetting?"Borrando…":"⚠️ Limpiar datos"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -930,17 +972,25 @@ function FixedExpenses({ items, setItems, income }) {
               <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, marginTop:2 }}>Línea amarilla = referencia ({bm.pct}% · {bm.desc})</div>
             </div>}
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {d.items.map(item=>(
-                <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 18px", background:C.card, border:`1px solid ${C.border}`, borderRadius:12, fontFamily:F }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:12 }}><span style={{ fontSize:18 }}>{item.icon}</span><span style={{ color:C.text, fontSize:14 }}>{item.name}</span></div>
+              {d.items.map(item=>{
+                const pri=FIXED_CAT_PRI[item.cat]||"Flexible", metaI=PM[pri];
+                return (
+                <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 18px", background:metaI.bg, border:`1px solid ${metaI.color}30`, borderRadius:12, fontFamily:F }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:18 }}>{item.icon}</span>
+                    <div>
+                      <div style={{ color:C.text, fontSize:14 }}>{item.name}</div>
+                      <Chip color={metaI.color} bg={`${metaI.color}18`}>{pri}</Chip>
+                    </div>
+                  </div>
                   <div style={{ display:"flex", alignItems:"center", gap:14 }}>
                     <span style={{ color:C.textDim, fontSize:12 }}>Día {item.day}</span>
-                    <span style={{ color:C.text, fontWeight:600, fontSize:14 }}>{fmt(item.amt)}</span>
+                    <span style={{ color:metaI.color, fontWeight:700, fontSize:14 }}>{fmt(item.amt)}</span>
                     <button onClick={()=>setEditItem(item)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 8px", fontSize:12 }}>✏️</button>
                     <button onClick={()=>delItem(item.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 8px", fontSize:12 }}>🗑</button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         );
@@ -1003,53 +1053,81 @@ function MSIPlans({ plans, cards }) {
   );
 }
 
-// ── ESTADO — priority cards first, score with factor breakdown ────────────────
+// ── ESTADO ────────────────────────────────────────────────────────────────────
 function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards }) {
-  const INCOME=income;
-  const totalFixed=fixedItems.reduce((s,f)=>s+f.amt,0);
-  const totalMSI=msiPlans.reduce((s,p)=>s+p.mo,0);
-  const totalVar=3600;
-  const free=Math.max(0,INCOME-totalFixed-totalMSI-totalVar);
-  const savRate=Math.round((free/INCOME)*100);
-  const thisMoSavings=txs.filter(t=>t.cat==="Ahorro").reduce((s,t)=>s+Math.abs(t.amt),0);
-  const savR=thisMoSavings/INCOME;
-  const totUsed=cards.reduce((s,c)=>s+c.used,0), totLim=cards.reduce((s,c)=>s+c.lim,0);
-  const creditUtil=totLim>0?(totUsed/totLim):0;
-  const committedR=(totalFixed+totalMSI)/INCOME;
+  const INCOME = income;
+  const totalFixed = fixedItems.reduce((s,f)=>s+f.amt, 0);
+  const totalMSI   = msiPlans.reduce((s,p)=>s+p.mo, 0);
+  const committed  = totalFixed + totalMSI;
+  const committedR = INCOME>0 ? committed/INCOME : 0;
 
-  const spentByGroup=txs.reduce((acc,tx)=>{ if(tx.amt>=0)return acc; const g=CAT_GROUP[tx.cat]; if(!g)return acc; acc[g]=(acc[g]||0)+Math.abs(tx.amt); return acc; },{});
+  const gastoVar       = txs.filter(t=>t.amt<0&&t.cat!=="Ahorro").reduce((s,t)=>s+Math.abs(t.amt), 0);
+  const thisMoSavings  = txs.filter(t=>t.cat==="Ahorro").reduce((s,t)=>s+Math.abs(t.amt), 0);
+  const totalPresup    = Object.values(groupBudgets).reduce((s,v)=>s+v, 0);
+  const librePresup    = totalPresup - gastoVar;
+  const libreTotal     = INCOME - committed - gastoVar;
+  const posibleAhorro  = Math.max(0, INCOME - committed - totalPresup);
+  const savR           = INCOME>0 ? thisMoSavings/INCOME : 0;
+  const savRate        = Math.round(Math.max(0,libreTotal)/Math.max(INCOME,1)*100);
+  const totUsed        = cards.reduce((s,c)=>s+c.used, 0);
+  const totLim         = cards.reduce((s,c)=>s+c.lim, 0);
+  const creditUtil     = totLim>0 ? totUsed/totLim : 0;
+
+  const spentByGroup = txs.reduce((acc,tx)=>{
+    if(tx.amt>=0) return acc;
+    const g=CAT_GROUP[tx.cat]; if(!g) return acc;
+    acc[g]=(acc[g]||0)+Math.abs(tx.amt); return acc;
+  },{});
 
   const factors = [
-    { label:"Compromisos del ingreso", detail:`fijos+MSI = ${Math.round(committedR*100)}% comprometido`, pts:committedR<0.50?25:committedR<0.65?15:5, maxPts:25 },
-    { label:"Tasa libre mensual",      detail:`${savRate}% disponible tras fijos, MSI y variables`,     pts:savRate>20?25:savRate>10?15:5, maxPts:25 },
-    { label:"Utilización de crédito",  detail:`${Math.round(creditUtil*100)}% del límite total usado`,  pts:creditUtil<0.30?25:creditUtil<0.50?15:5, maxPts:25 },
-    { label:"Ahorro del mes",          detail:`${Math.round(savR*100)}% del ingreso destinado a ahorro`,pts:savR>0.10?25:savR>0.05?15:5, maxPts:25 },
+    { label:"Compromisos del ingreso", detail:`${Math.round(committedR*100)}% fijos+MSI`,  pts:committedR<0.50?25:committedR<0.65?15:5, maxPts:25 },
+    { label:"Tasa libre mensual",      detail:`${savRate}% disponible`,                    pts:savRate>20?25:savRate>10?15:5,            maxPts:25 },
+    { label:"Utilización de crédito",  detail:`${Math.round(creditUtil*100)}% del límite`, pts:creditUtil<0.30?25:creditUtil<0.50?15:5,  maxPts:25 },
+    { label:"Ahorro del mes",          detail:`${Math.round(savR*100)}% del ingreso`,      pts:savR>0.10?25:savR>0.05?15:5,             maxPts:25 },
   ];
-  const score = Math.min(100, factors.reduce((s,f)=>s+f.pts,0));
+  const score = Math.min(100, factors.reduce((s,f)=>s+f.pts, 0));
+  const mes = new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
-      {/* ── HERO: priority cards first ── */}
-      <SCard style={{ gridColumn:"1/-1" }}>
-        <Label>Presupuesto por prioridad — Mayo 2026</Label>
+      {/* ── 1. HERO ──────────────────────────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+        {[
+          { lbl:"Ingreso mensual",       val:fmt(INCOME),                       col:C.accent, sub:"confirmado este mes",                            icon:"💰" },
+          { lbl:"Gastado hasta hoy",     val:fmt(gastoVar),                     col:C.red,    sub:`${INCOME>0?Math.round(gastoVar/INCOME*100):0}% del ingreso`, icon:"🛒" },
+          { lbl:"Libre del presupuesto", val:fmt(Math.max(0,librePresup)),      col:librePresup<0?C.red:C.blue, sub:`de ${fmt(totalPresup)} asignado`, icon:"📊" },
+          { lbl:"Disponible ahora",      val:fmt(Math.max(0,libreTotal)),       col:libreTotal<0?C.red:C.accent, sub:libreTotal<0?"Presupuesto excedido":"tras compromisos y gastos", icon:"🆓" },
+        ].map(m=>(
+          <SCard key={m.lbl} style={{ padding:"16px 20px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", lineHeight:1.4 }}>{m.lbl}</div>
+              <span style={{ fontSize:18 }}>{m.icon}</span>
+            </div>
+            <div style={{ color:m.col, fontSize:22, fontWeight:700, fontFamily:F, marginBottom:3 }}>{m.val}</div>
+            <div style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{m.sub}</div>
+          </SCard>
+        ))}
+      </div>
+
+      {/* ── 2. PRESUPUESTO POR GRUPO ─────────────────────────────────────── */}
+      <SCard>
+        <Label>{mes.charAt(0).toUpperCase()+mes.slice(1)} — Presupuesto por prioridad</Label>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
           {PRIORITIES.map(p=>{
             const budget=groupBudgets[p]||0, actual=spentByGroup[p]||0;
             const pct=budget>0?(actual/budget)*100:0, meta=PM[p];
-            const bmAmt=GROUP_BM[p].pct/100*INCOME;
             return (
-              <div key={p} style={{ background:meta.bg, border:`1px solid ${meta.color}30`, borderRadius:14, padding:"16px 18px" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:12 }}>
-                  <div style={{ width:4, height:16, borderRadius:2, background:meta.color }}/>
-                  <span style={{ color:meta.color, fontSize:13, fontWeight:700, fontFamily:F }}>{p}</span>
+              <div key={p} style={{ background:meta.bg, border:`1px solid ${meta.color}30`, borderRadius:14, padding:"14px 16px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10 }}>
+                  <div style={{ width:4, height:14, borderRadius:2, background:meta.color }}/>
+                  <span style={{ color:meta.color, fontSize:12, fontWeight:700, fontFamily:F }}>{p}</span>
                 </div>
-                <div style={{ color:pct>100?C.red:meta.color, fontSize:22, fontWeight:700, fontFamily:F, marginBottom:4 }}>{fmt(actual)}</div>
-                <div style={{ color:C.textDim, fontSize:11, fontFamily:F, marginBottom:10 }}>de {fmt(budget)} presupuestado</div>
+                <div style={{ color:pct>100?C.red:meta.color, fontSize:20, fontWeight:700, fontFamily:F, marginBottom:2 }}>{fmt(actual)}</div>
+                <div style={{ color:C.textDim, fontSize:11, fontFamily:F, marginBottom:8 }}>de {fmt(budget)} · {pct.toFixed(0)}%</div>
                 <ProgressBar value={actual} max={budget||1} color={meta.color} h={5}/>
-                <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
-                  <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{pct.toFixed(0)}%</span>
-                  <span style={{ color:pct>100?C.red:pct>80?C.yellow:C.accent, fontSize:11, fontFamily:F, fontWeight:600 }}>{pct>100?"Excedido":pct>80?"En riesgo":pct>50?"En curso":"Bajo control"}</span>
+                <div style={{ color:pct>100?C.red:pct>80?C.yellow:C.accent, fontSize:10, fontFamily:F, marginTop:5, fontWeight:600 }}>
+                  {pct>100?"Excedido":pct>80?"En riesgo":pct>50?"En curso":"Bajo control"}
                 </div>
               </div>
             );
@@ -1057,63 +1135,69 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
         </div>
       </SCard>
 
-      {/* ── Score con factores (secundario) ── */}
-      <SCard style={{ padding:"18px 22px" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:18 }}>
-          <ScoreGauge score={score}/>
-          <div>
-            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>Score financiero</div>
-            <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:13, fontFamily:F }}>{score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100</div>
-          </div>
-        </div>
-        <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:14 }}>
-          {factors.map(f=><ScoreFactorRow key={f.label} {...f}/>)}
-        </div>
-      </SCard>
+      {/* ── 3. AHORROS + PLANIFICACIÓN ───────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
 
-      {/* ── Ahorro (información secundaria) ── */}
-      <SCard style={{ padding:"18px 22px" }}>
-        <Label>Ahorro e inversión acumulado</Label>
-        <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
-          <span style={{ color:C.accent, fontSize:32, fontWeight:700, fontFamily:F }}>{fmt(prevSavings+thisMoSavings)}</span>
-          <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>acumulado</span>
-        </div>
-        <div style={{ marginBottom:14 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-            <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Meta 20% del ingreso ({fmt(INCOME*0.20)}/mes)</span>
-            <span style={{ color:savR>=0.20?C.accent:savR>0.10?C.yellow:C.red, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(savR*100)}%</span>
+        <SCard style={{ padding:"18px 22px" }}>
+          <Label>Ahorro acumulado</Label>
+          <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:10 }}>
+            <span style={{ color:C.accent, fontSize:30, fontWeight:700, fontFamily:F }}>{fmt(prevSavings+thisMoSavings)}</span>
+            <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>total</span>
           </div>
-          <ProgressBar value={thisMoSavings} max={INCOME*0.20} color={C.accent} h={7}/>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-          {[
-            { lbl:"Este mes",          val:fmt(thisMoSavings), col:C.blue    },
-            { lbl:"Acumulado anterior", val:fmt(prevSavings),   col:C.textDim },
-          ].map(s=>(
-            <div key={s.lbl} style={{ background:C.surface, borderRadius:10, padding:"12px 14px" }}>
-              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:6 }}>{s.lbl}</div>
-              <div style={{ color:s.col, fontSize:16, fontWeight:700, fontFamily:F }}>{s.val}</div>
+          <div style={{ marginBottom:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+              <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Meta 20% ({fmt(INCOME*0.20)}/mes)</span>
+              <span style={{ color:savR>=0.20?C.accent:savR>0.10?C.yellow:C.red, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(savR*100)}%</span>
             </div>
-          ))}
-        </div>
-        {txs.filter(t=>t.cat==="Ahorro").length>0&&<>
-          <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Instrumentos este mes</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {txs.filter(t=>t.cat==="Ahorro").map(tx=>(
-              <div key={tx.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", background:C.surface, borderRadius:10, border:`1px solid ${C.border}` }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <span style={{ fontSize:16 }}>{tx.icon}</span>
-                  <span style={{ color:C.textDim, fontSize:13, fontFamily:F }}>{tx.desc}</span>
-                </div>
-                <span style={{ color:C.accent, fontSize:13, fontWeight:700, fontFamily:F }}>{fmt(Math.abs(tx.amt))}</span>
+            <ProgressBar value={thisMoSavings} max={INCOME*0.20||1} color={C.accent} h={7}/>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            {[{lbl:"Este mes",val:fmt(thisMoSavings),col:C.blue},{lbl:"Acumulado anterior",val:fmt(prevSavings),col:C.textDim}].map(s=>(
+              <div key={s.lbl} style={{ background:C.surface, borderRadius:10, padding:"10px 14px" }}>
+                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:5 }}>{s.lbl}</div>
+                <div style={{ color:s.col, fontSize:15, fontWeight:700, fontFamily:F }}>{s.val}</div>
               </div>
             ))}
           </div>
-        </>}
+        </SCard>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {[
+            { lbl:"Compromisos del ingreso", val:`${Math.round(committedR*100)}%`,    sub:`${fmt(committed)} fijos + MSI`,                    col:committedR>0.65?C.red:committedR>0.50?C.yellow:C.accent, icon:"📌" },
+            { lbl:"Utilización de crédito",  val:totLim>0?`${Math.round(creditUtil*100)}%`:"—", sub:totLim>0?`${fmt(totUsed)} de ${fmt(totLim)}`:"Sin tarjetas registradas", col:creditUtil>0.50?C.red:creditUtil>0.30?C.yellow:C.accent, icon:"💳" },
+            { lbl:"Posible ahorro del mes",   val:fmt(posibleAhorro),                  sub:"si gastas exactamente lo presupuestado",            col:C.accent, icon:"📈" },
+            { lbl:"Libre tras todo",          val:fmt(Math.max(0,libreTotal)),         sub:libreTotal<0?`Excedido ${fmt(Math.abs(libreTotal))}`:"disponible ahora", col:libreTotal<0?C.red:libreTotal<1000?C.yellow:C.accent, icon:"💵" },
+          ].map(item=>(
+            <SCard key={item.lbl} style={{ padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
+              <span style={{ fontSize:20, flexShrink:0 }}>{item.icon}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.07em" }}>{item.lbl}</div>
+                <div style={{ color:item.col, fontSize:16, fontWeight:700, fontFamily:F }}>{item.val}</div>
+                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>{item.sub}</div>
+              </div>
+            </SCard>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 4. SCORE FINANCIERO ──────────────────────────────────────────── */}
+      <SCard style={{ padding:"18px 22px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+          <ScoreGauge score={score}/>
+          <div style={{ flex:1 }}>
+            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>Score financiero</div>
+            <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:13, fontFamily:F, marginBottom:16 }}>
+              {score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 32px" }}>
+              {factors.map(f=><ScoreFactorRow key={f.label} {...f}/>)}
+            </div>
+          </div>
+        </div>
       </SCard>
 
-      {/* ── Budget vs real (primero) ── */}
-      <SCard style={{ gridColumn:"1/-1" }}>
+      {/* ── 5. GRÁFICOS ──────────────────────────────────────────────────── */}
+      <SCard>
         <Label>Presupuesto vs real por categoría</Label>
         <div style={{ display:"flex", gap:20, marginBottom:16 }}>
           {[{col:C.blue,lbl:"Presupuesto",op:0.5},{col:C.accent,lbl:"Dentro del límite"},{col:C.red,lbl:"Excedido"}].map(l=>(
@@ -1131,9 +1215,8 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
         </ResponsiveContainer>
       </SCard>
 
-      {/* ── Tendencia histórica ── */}
-      <SCard style={{ gridColumn:"1/-1" }}>
-        <Label>Gasto total histórico mensual</Label>
+      <SCard>
+        <Label>Gasto histórico mensual</Label>
         <div style={{ display:"flex", gap:14, marginBottom:16, flexWrap:"wrap" }}>
           {EXP_CATS.map(cat=><div key={cat} style={{ display:"flex", alignItems:"center", gap:5 }}><div style={{ width:8, height:8, borderRadius:"50%", background:EXP_COLORS[cat] }}/><span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{cat}</span></div>)}
         </div>
@@ -1189,29 +1272,40 @@ function Budget({ groupBudgets, setGroupBudgets, income }) {
       {PRIORITIES.map(priority=>{
         const group=cats.filter(c=>c.priority===priority);
         const meta=PM[priority], budget=groupBudgets[priority]||0, isCollapsed=collapsed[priority];
+        const bmAmt=GROUP_BM[priority].pct/100*INCOME;
+        const over=budget>bmAmt*1.2;
         return (
           <div key={priority} style={{ marginBottom:20 }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 18px", background:meta.bg, border:`1px solid ${meta.color}30`, borderRadius:12, marginBottom:isCollapsed?0:10 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <div style={{ width:4, height:18, borderRadius:2, background:meta.color }}/>
-                <span style={{ color:meta.color, fontWeight:700, fontSize:14, fontFamily:F }}>{priority}</span>
-                <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>{group.length} categorías</span>
+            {/* Cabecera del grupo — editable, con benchmark */}
+            <div style={{ background:meta.bg, border:`1px solid ${meta.color}30`, borderRadius:12, padding:"14px 18px", marginBottom:isCollapsed?0:10 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ width:4, height:18, borderRadius:2, background:meta.color }}/>
+                  <span style={{ color:meta.color, fontWeight:700, fontSize:14, fontFamily:F }}>{priority}</span>
+                  <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>{group.length} categorías</span>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                  {editGroup===priority
+                    ? <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <input autoFocus value={tempVal} onChange={e=>setTempVal(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter")saveGroup(priority); if(e.key==="Escape")setEditGroup(null); }} style={{ width:110, background:C.card, border:`1px solid ${meta.color}`, borderRadius:8, padding:"5px 10px", color:meta.color, fontFamily:F, fontSize:14, fontWeight:600, outline:"none", textAlign:"right" }}/>
+                        <button onClick={()=>saveGroup(priority)} style={{ ...BtnP, padding:"5px 10px" }}>✓</button>
+                      </div>
+                    : <div onClick={()=>{ setEditGroup(priority); setTempVal(showPct?Math.round(budget/INCOME*100).toString():budget.toString()); }} style={{ color:meta.color, fontWeight:700, fontSize:15, fontFamily:F, cursor:"pointer", padding:"5px 14px", borderRadius:8, background:`${meta.color}15`, border:`1px solid ${meta.color}30` }}>{displayBudget(budget)}/mes</div>
+                  }
+                  <button onClick={()=>setCollapsed(prev=>({...prev,[priority]:!prev[priority]}))} style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textMuted, fontSize:13, padding:"4px 6px" }}>{isCollapsed?"▶":"▼"}</button>
+                </div>
               </div>
-              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                {editGroup===priority
-                  ? <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <input autoFocus value={tempVal} onChange={e=>setTempVal(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter")saveGroup(priority); if(e.key==="Escape")setEditGroup(null); }} style={{ width:110, background:C.card, border:`1px solid ${meta.color}`, borderRadius:8, padding:"5px 10px", color:meta.color, fontFamily:F, fontSize:14, fontWeight:600, outline:"none", textAlign:"right" }}/>
-                      <button onClick={()=>saveGroup(priority)} style={{ ...BtnP, padding:"5px 10px" }}>✓</button>
-                    </div>
-                  : <div onClick={()=>{ setEditGroup(priority); setTempVal(showPct?Math.round(budget/INCOME*100).toString():budget.toString()); }} style={{ color:meta.color, fontWeight:700, fontSize:15, fontFamily:F, cursor:"pointer", padding:"5px 14px", borderRadius:8, background:`${meta.color}15`, border:`1px solid ${meta.color}30` }}>{displayBudget(budget)}/mes</div>
-                }
-                <button onClick={()=>setCollapsed(prev=>({...prev,[priority]:!prev[priority]}))} style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textMuted, fontSize:13, padding:"4px 6px" }}>{isCollapsed?"▶":"▼"}</button>
+              {/* Benchmark bar — igual que FixedExpenses */}
+              <BenchmarkBar value={budget} benchmark={bmAmt} color={meta.color} h={4}/>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
+                <span style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>Ref. {GROUP_BM[priority].pct}% · {GROUP_BM[priority].desc}</span>
+                <span style={{ color:over?C.red:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600 }}>{over?"Excede referencia":""}</span>
               </div>
             </div>
             {!isCollapsed&&<div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               {group.map(cat=>(
-                <div key={cat.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 18px", background:C.card, border:`1px solid ${C.border}`, borderRadius:12, fontFamily:F }}>
-                  <span style={{ fontSize:22, flexShrink:0 }}>{cat.icon}</span>
+                <div key={cat.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 18px", background:meta.bg, border:`1px solid ${meta.color}20`, borderRadius:12, fontFamily:F }}>
+                  <span style={{ fontSize:20, flexShrink:0 }}>{cat.icon}</span>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ color:C.text, fontSize:14, fontWeight:500 }}>{cat.name}</div>
                     <div style={{ color:C.textMuted, fontSize:11, marginTop:2, lineHeight:1.4 }}>{cat.desc}</div>

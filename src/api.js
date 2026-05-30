@@ -46,6 +46,7 @@ export const getTendencia   = (meses = 6) => req("GET", `/api/tendencia?meses=${
 export const importCSV      = (csvText, tarjetaId = null) => req("POST", "/api/import/csv", { csv: csvText, tarjeta_id: tarjetaId });
 export const health         = () => req("GET", "/health");
 export const parseEstadoCuenta = (pdfBase64)  => req("POST", "/api/tarjetas/parse-estado", { pdf_base64: pdfBase64 });
+export const resetDatos        = ()            => req("DELETE", "/api/reset/datos");
 export const getTarjetas    = ()              => req("GET", "/api/tarjetas");
 export const postTarjeta    = (data)          => req("POST", "/api/tarjetas", data);
 export const putTarjeta     = (id, data)      => req("PUT", `/api/tarjetas/${id}`, data);
