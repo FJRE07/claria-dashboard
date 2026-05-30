@@ -1159,15 +1159,12 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
       <SCard style={{ padding:"20px 24px" }}>
         <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:24 }}>
           {/* Score */}
-          <div style={{ display:"flex", alignItems:"flex-start", gap:16 }}>
-            <div style={{ flexShrink:0 }}><ScoreGauge score={score}/></div>
-            <div style={{ flex:1 }}>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}>
+            <ScoreGauge score={score}/>
+            <div style={{ textAlign:"center" }}>
               <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>Score financiero</div>
-              <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:14, fontWeight:700, fontFamily:F, marginBottom:12 }}>
+              <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:15, fontWeight:700, fontFamily:F }}>
                 {score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"2px 20px" }}>
-                {factors.map(f=><ScoreFactorRow key={f.label} {...f}/>)}
               </div>
             </div>
           </div>
@@ -1267,11 +1264,31 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
         </SCard>
       </div>
 
-      {/* ── 4. DISTRIBUCIÓN DE GASTOS (top 5 + Otros) ───────────────────── */}
-      {distData.length>0&&<SCard>
+      {/* ── 4. DISTRIBUCIÓN DE GASTOS — presupuesto vs gastado por prioridad */}
+      <SCard>
         <Label>Distribución de gastos</Label>
-        <PieDistrib data={distData} size={200}/>
-      </SCard>}
+        <div style={{ display:"flex", gap:20, marginBottom:16 }}>
+          {[{col:C.blue,lbl:"Presupuestado",op:0.45},{col:C.accent,lbl:"Dentro del límite"},{col:C.red,lbl:"Excedido"}].map(l=>(
+            <div key={l.lbl} style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ width:12, height:12, borderRadius:3, background:l.col, opacity:l.op||1 }}/>
+              <span style={{ color:C.textDim, fontSize:12, fontFamily:F }}>{l.lbl}</span>
+            </div>
+          ))}
+        </div>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart
+            data={PRIORITIES.map(p=>({ cat:p, bud:groupBudgets[p]||0, real:spentByGroup[p]||0, color:PM[p].color }))}
+            barGap={4} barCategoryGap="28%" margin={{ top:0, right:10, bottom:0, left:0 }}>
+            <XAxis dataKey="cat" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
+            <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
+            <Tooltip cursor={{ fill:"transparent" }} contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, fontFamily:F, fontSize:12, color:C.text }}/>
+            <Bar dataKey="bud" name="Presupuesto" fill={C.blue} radius={[4,4,0,0]} opacity={0.45} activeBar={{ opacity:0.45 }}/>
+            <Bar dataKey="real" name="Gastado" radius={[4,4,0,0]} activeBar={false}>
+              {PRIORITIES.map((p,i)=><Cell key={i} fill={(spentByGroup[p]||0)>(groupBudgets[p]||0)?C.red:PM[p].color}/>)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </SCard>
 
       {/* ── 5. HISTÓRICO MENSUAL (top 5 + Otros) ────────────────────────── */}
       <SCard>
@@ -1286,7 +1303,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
           <BarChart data={histTrend} barCategoryGap="30%" margin={{ top:0, right:16, bottom:0, left:0 }}>
             <XAxis dataKey="m" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
             <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
-            <Tooltip cursor={{ fill:"transparent" }} contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, fontFamily:F, fontSize:12 }}/>
+            <Tooltip cursor={{ fill:"transparent" }} contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, fontFamily:F, fontSize:12, color:C.text }}/>
             {histCats.map((cat,i)=>(
               <Bar key={cat} dataKey={cat} name={cat} stackId="a"
                 fill={HIST_COLORS[cat]||C.textDim} maxBarSize={64}
