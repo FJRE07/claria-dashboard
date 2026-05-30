@@ -25,8 +25,12 @@ const PM = {
 };
 // fixed-expense category → priority group
 const FIXED_CAT_PRI = {
-  "Vivienda":"Esencial","Salud":"Esencial","Servicios":"Esencial",
-  "Tecnología":"Importante","Entretenimiento":"Prescindible","Otros":"Flexible",
+  "Vivienda":"Esencial", "Salud":"Esencial", "Servicios":"Esencial",
+  "Transporte":"Esencial", "Seguros":"Esencial",
+  "Inversión":"Importante", "Gimnasio":"Importante", "Celular":"Importante",
+  "Telecom":"Importante", "Trabajo / Consulta":"Importante", "Educación":"Importante",
+  "Entretenimiento":"Prescindible", "Suscripciones":"Prescindible",
+  "Ropa":"Flexible", "Otros":"Flexible",
 };
 // benchmark as % of monthly income
 const CAT_BM = {
@@ -386,7 +390,16 @@ function TxModal({ tx, cards, onSave, onClose }) {
 function FixedModal({ item, onSave, onClose }) {
   const [d,setD]=useState({...item});
   const save=()=>{ if(!d.name||!d.amt)return; onSave({...d,id:d.id||Date.now(),amt:parseFloat(d.amt)||0}); onClose(); };
-  const FIXED_CATS=["Vivienda","Entretenimiento","Salud","Tecnología","Servicios","Otros"];
+  const FIXED_CATS=[
+    // Esencial
+    "Vivienda","Salud","Servicios","Transporte","Seguros",
+    // Importante
+    "Inversión","Gimnasio","Celular","Telecom","Trabajo / Consulta","Educación",
+    // Prescindible
+    "Entretenimiento","Suscripciones",
+    // Flexible
+    "Ropa","Otros",
+  ];
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }}>
       <div onClick={e=>e.stopPropagation()} style={{ width:440, background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:"24px 28px", animation:"slideUp .25s ease" }}>
@@ -400,7 +413,7 @@ function FixedModal({ item, onSave, onClose }) {
           ))}
           <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Monto mensual</div><input type="number" value={d.amt||""} onChange={e=>setD(p=>({...p,amt:e.target.value}))} style={IS}/></div>
           <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Día de cobro</div><input type="number" min="1" max="31" value={d.day||1} onChange={e=>setD(p=>({...p,day:parseInt(e.target.value)||1}))} style={IS}/></div>
-          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Categoría</div><select value={d.cat||"Servicios"} onChange={e=>setD(p=>({...p,cat:e.target.value}))} style={IS}>{FIXED_CATS.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+          <div style={{ gridColumn:"1/-1" }}><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Categoría</div><select value={d.cat||"Servicios"} onChange={e=>setD(p=>({...p,cat:e.target.value}))} style={IS}>{FIXED_CATS.map(c=><option key={c} value={c}>{c} — {FIXED_CAT_PRI[c]||"Flexible"}</option>)}</select></div>
         </div>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <button onClick={onClose} style={BtnS}>Cancelar</button>
@@ -900,7 +913,14 @@ function FixedExpenses({ items, setItems, income }) {
   // group by PRIORITY for the donut
   const byPri=items.reduce((acc,f)=>{ const p=FIXED_CAT_PRI[f.cat]||"Flexible"; (acc[p]=acc[p]||0); acc[p]+=f.amt; return acc; },{});
   const pieDat=PRIORITIES.map(p=>({ name:p, value:byPri[p]||0, color:PM[p].color }));
-  const catCol={ Vivienda:C.blue, Entretenimiento:C.purple, Salud:C.accent, Tecnología:C.teal, Servicios:C.yellow, Otros:C.textDim };
+  const catCol={
+    Vivienda:"#3D8EF5", Salud:"#00D4A0", Servicios:"#FFBA2C",
+    Transporte:"#22D3EE", Seguros:"#9B7BFF",
+    Inversión:"#00D4A0", Gimnasio:"#FF6B6B", Celular:"#3D8EF5",
+    Telecom:"#7C3AED", "Trabajo / Consulta":"#06B6D4", Educación:"#F59E0B",
+    Entretenimiento:"#EC4899", Suscripciones:"#8B5CF6",
+    Ropa:"#F97316", Otros:"#6B8CA8",
+  };
 
   const saveItem=async(item)=>{
     const payload={ detalle:item.name, monto:item.amt, grupo:item.cat, icono:item.icon, dia_cobro:item.day };
@@ -974,8 +994,9 @@ function FixedExpenses({ items, setItems, income }) {
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               {d.items.map(item=>{
                 const pri=FIXED_CAT_PRI[item.cat]||"Flexible", metaI=PM[pri];
+                const itemCol=catCol[item.cat]||col;
                 return (
-                <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 18px", background:metaI.bg, border:`1px solid ${metaI.color}30`, borderRadius:12, fontFamily:F }}>
+                <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 18px", background:`${itemCol}10`, borderLeft:`4px solid ${itemCol}`, border:`1px solid ${itemCol}25`, borderRadius:12, fontFamily:F }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                     <span style={{ fontSize:18 }}>{item.icon}</span>
                     <div>
@@ -985,7 +1006,7 @@ function FixedExpenses({ items, setItems, income }) {
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:14 }}>
                     <span style={{ color:C.textDim, fontSize:12 }}>Día {item.day}</span>
-                    <span style={{ color:metaI.color, fontWeight:700, fontSize:14 }}>{fmt(item.amt)}</span>
+                    <span style={{ color:itemCol, fontWeight:700, fontSize:14 }}>{fmt(item.amt)}</span>
                     <button onClick={()=>setEditItem(item)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 8px", fontSize:12 }}>✏️</button>
                     <button onClick={()=>delItem(item.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 8px", fontSize:12 }}>🗑</button>
                   </div>
@@ -1318,54 +1339,6 @@ function Budget({ groupBudgets, setGroupBudgets, income }) {
   );
 }
 
-// ── WHATSAPP BOT ──────────────────────────────────────────────────────────────
-function WABot({ onAdd }) {
-  const [open,setOpen]=useState(false);
-  const [msgs,setMsgs]=useState([{ id:0, from:"bot", text:"Hola, soy ClarIA.\n\nEscríbeme un gasto y lo registro.\n\nEj: \"gasté 350 en tacos\"" }]);
-  const [input,setInput]=useState(""); const [busy,setBusy]=useState(false);
-  const endRef=useRef(null);
-  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:"smooth"}); },[msgs]);
-  const send=async()=>{
-    if(!input.trim()||busy)return;
-    const txt=input.trim(); setInput(""); setBusy(true);
-    setMsgs(m=>[...m,{id:Date.now(),from:"user",text:txt}]);
-    await new Promise(r=>setTimeout(r,700+Math.random()*500));
-    const n=(txt.match(/\d[\d,.]*/g)||[]).map(s=>parseFloat(s.replace(",","")))[0]||200;
-    const isIn=/recib|ingres|cobr|salar/i.test(txt);
-    const rules=[[/taco|pizza|sushi|comid|cena|rappi/i,"Comida","🍽️"],[/gasolina/i,"Transporte","⛽"],[/uber|taxi/i,"Transporte","🚗"],[/netflix|spotify|suscri/i,"Suscripciones","📱"],[/farma|medic/i,"Salud","💊"],[/walmart|super/i,"Supermercado","🛒"]];
-    let cat="Otros",icon="💸";
-    for(const[re,c,ic]of rules){if(re.test(txt)){cat=c;icon=ic;break;}}
-    if(isIn){cat="Ingreso";icon="💰";}
-    const tx={id:++_txId,date:todayStr(),desc:txt.slice(0,48),amt:isIn?n:-n,cat,icon,src:"whatsapp",cardId:null};
-    onAdd(tx);
-    setMsgs(m=>[...m,{id:Date.now()+1,from:"bot",text:`Registrado:\n${icon} ${tx.desc}\n${tx.amt<0?"−":"+"}${fmt(Math.abs(tx.amt))} · ${cat}`}]);
-    setBusy(false);
-  };
-  return (
-    <>
-      <button onClick={()=>setOpen(o=>!o)} style={{ position:"fixed", bottom:28, right:28, width:54, height:54, borderRadius:"50%", background:open?C.border:C.wa, border:"none", cursor:"pointer", fontSize:22, boxShadow:`0 4px 24px rgba(37,211,102,${open?0.1:0.45})`, zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff" }}>
-        {open?"✕":"💬"}
-      </button>
-      {open&&<div style={{ position:"fixed", bottom:94, right:28, width:360, height:500, background:C.card, border:`1px solid ${C.border}`, borderRadius:20, display:"flex", flexDirection:"column", zIndex:199, boxShadow:"0 24px 72px rgba(0,0,0,0.6)", animation:"slideUp .25s ease" }}>
-        <div style={{ padding:"14px 20px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:12 }}>
-          <div style={{ width:38, height:38, borderRadius:"50%", background:C.wa, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🤖</div>
-          <div style={{ color:C.text, fontFamily:F, fontWeight:600 }}>ClarIA Bot</div>
-        </div>
-        <div style={{ flex:1, overflowY:"auto", padding:"12px", display:"flex", flexDirection:"column", gap:8 }}>
-          {msgs.map(m=><div key={m.id} style={{ display:"flex", justifyContent:m.from==="user"?"flex-end":"flex-start" }}>
-            <div style={{ maxWidth:"82%", padding:"10px 14px", borderRadius:m.from==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px", background:m.from==="user"?C.wa:C.surface, border:m.from==="bot"?`1px solid ${C.border}`:"none", color:m.from==="user"?"#fff":C.text, fontFamily:F, fontSize:13, lineHeight:1.5, whiteSpace:"pre-line" }}>{m.text}</div>
-          </div>)}
-          {busy&&<div style={{ display:"flex", gap:5, padding:"10px 14px", background:C.surface, borderRadius:12, width:"fit-content" }}>{[0,1,2].map(i=><div key={i} style={{ width:7, height:7, borderRadius:"50%", background:C.textMuted, animation:`bounce 1s ease ${i*0.18}s infinite` }}/>)}</div>}
-          <div ref={endRef}/>
-        </div>
-        <div style={{ padding:"10px 14px", borderTop:`1px solid ${C.border}`, display:"flex", gap:8 }}>
-          <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="ej: gasté 250 en tacos…" style={{ flex:1, background:C.surface, border:`1px solid ${C.border}`, borderRadius:99, padding:"9px 16px", color:C.text, fontFamily:F, fontSize:13, outline:"none" }}/>
-          <button onClick={send} disabled={busy} style={{ width:38, height:38, borderRadius:"50%", background:busy?C.border:C.accent, border:"none", cursor:busy?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:C.bg, fontSize:16 }}>➤</button>
-        </div>
-      </div>}
-    </>
-  );
-}
 
 // ── ONBOARDING WIZARD ─────────────────────────────────────────────────────────
 const GRUPOS_FIJO = ["Vivienda","Salud","Servicios","Gimnasio","Entretenimiento","Telecom","Inversión","Trabajo / Consulta","Celular","Otros"];
@@ -1752,7 +1725,6 @@ function Dashboard({ logout }) {
           {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards}/>}
         </div>
       </main>
-      <WABot onAdd={addTx}/>
     </div>
   );
 }
