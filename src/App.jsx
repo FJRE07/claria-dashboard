@@ -1097,6 +1097,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
   const msiAvgMonths   = totalMSI>0 ? Math.round(msiTotalCommit/totalMSI) : 0;
 
   const savRate = Math.round(Math.max(0, INCOME-committed-gastoVar)/Math.max(INCOME,1)*100);
+  const spentByGroup = txs.reduce((acc,tx)=>{ if(tx.amt>=0)return acc; const g=CAT_GROUP[tx.cat]; if(!g)return acc; acc[g]=(acc[g]||0)+Math.abs(tx.amt); return acc; },{});
   const factors = [
     { label:"Compromisos del ingreso", detail:`${Math.round(committedR*100)}% fijos+MSI`,  pts:committedR<0.50?25:committedR<0.65?15:5, maxPts:25 },
     { label:"Tasa libre mensual",      detail:`${savRate}% disponible`,                    pts:savRate>20?25:savRate>10?15:5,            maxPts:25 },
