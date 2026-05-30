@@ -1091,26 +1091,82 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
-      {/* ── 1. HERO ──────────────────────────────────────────────────────── */}
+      {/* ── 1. HERO (sin emojis) ─────────────────────────────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
         {[
-          { lbl:"Ingreso mensual",       val:fmt(INCOME),                       col:C.accent, sub:"confirmado este mes",                            icon:"💰" },
-          { lbl:"Gastado hasta hoy",     val:fmt(gastoVar),                     col:C.red,    sub:`${INCOME>0?Math.round(gastoVar/INCOME*100):0}% del ingreso`, icon:"🛒" },
-          { lbl:"Libre del presupuesto", val:fmt(Math.max(0,librePresup)),      col:librePresup<0?C.red:C.blue, sub:`de ${fmt(totalPresup)} asignado`, icon:"📊" },
-          { lbl:"Disponible ahora",      val:fmt(Math.max(0,libreTotal)),       col:libreTotal<0?C.red:C.accent, sub:libreTotal<0?"Presupuesto excedido":"tras compromisos y gastos", icon:"🆓" },
+          { lbl:"Ingreso mensual",       val:fmt(INCOME),                  col:C.accent, sub:"confirmado este mes" },
+          { lbl:"Gastado hasta hoy",     val:fmt(gastoVar),                col:C.red,    sub:`${INCOME>0?Math.round(gastoVar/INCOME*100):0}% del ingreso` },
+          { lbl:"Libre del presupuesto", val:fmt(Math.max(0,librePresup)), col:librePresup<0?C.red:C.blue, sub:`de ${fmt(totalPresup)} asignado` },
+          { lbl:"Disponible ahora",      val:fmt(Math.max(0,libreTotal)),  col:libreTotal<0?C.red:C.accent, sub:libreTotal<0?"Presupuesto excedido":"tras compromisos y gastos" },
         ].map(m=>(
           <SCard key={m.lbl} style={{ padding:"16px 20px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", lineHeight:1.4 }}>{m.lbl}</div>
-              <span style={{ fontSize:18 }}>{m.icon}</span>
-            </div>
+            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{m.lbl}</div>
             <div style={{ color:m.col, fontSize:22, fontWeight:700, fontFamily:F, marginBottom:3 }}>{m.val}</div>
             <div style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{m.sub}</div>
           </SCard>
         ))}
       </div>
 
-      {/* ── 2. PRESUPUESTO POR GRUPO ─────────────────────────────────────── */}
+      {/* ── 2. SCORE + AHORRO + PLANIFICACIÓN ────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:20 }}>
+
+        {/* Izquierda: Score gauge + Ahorro + Posible ahorro */}
+        <SCard style={{ padding:"20px 24px" }}>
+          {/* Score */}
+          <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:20, paddingBottom:16, borderBottom:`1px solid ${C.border}` }}>
+            <ScoreGauge score={score}/>
+            <div style={{ flex:1 }}>
+              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>Score financiero</div>
+              <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:14, fontWeight:700, fontFamily:F }}>{score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 20px", marginTop:10 }}>
+                {factors.map(f=><ScoreFactorRow key={f.label} {...f}/>)}
+              </div>
+            </div>
+          </div>
+          {/* Ahorro */}
+          <Label>Ahorro acumulado</Label>
+          <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
+            <span style={{ color:C.accent, fontSize:28, fontWeight:700, fontFamily:F }}>{fmt(prevSavings+thisMoSavings)}</span>
+            <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>total</span>
+          </div>
+          <div style={{ marginBottom:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+              <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Meta 20% ({fmt(INCOME*0.20)}/mes)</span>
+              <span style={{ color:savR>=0.20?C.accent:savR>0.10?C.yellow:C.red, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(savR*100)}%</span>
+            </div>
+            <ProgressBar value={thisMoSavings} max={INCOME*0.20||1} color={C.accent} h={6}/>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+            {[
+              {lbl:"Este mes",         val:fmt(thisMoSavings), col:C.blue},
+              {lbl:"Acum. anterior",   val:fmt(prevSavings),   col:C.textDim},
+              {lbl:"Posible este mes", val:fmt(posibleAhorro), col:C.accent},
+            ].map(s=>(
+              <div key={s.lbl} style={{ background:C.surface, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:4 }}>{s.lbl}</div>
+                <div style={{ color:s.col, fontSize:14, fontWeight:700, fontFamily:F }}>{s.val}</div>
+              </div>
+            ))}
+          </div>
+        </SCard>
+
+        {/* Derecha: Compromisos + Utilización */}
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          {[
+            { lbl:"Compromisos del ingreso", val:`${Math.round(committedR*100)}%`, sub:`${fmt(committed)} fijos + MSI`, col:committedR>0.65?C.red:committedR>0.50?C.yellow:C.accent, bar:committedR, maxBar:1 },
+            { lbl:"Utilización de crédito",  val:totLim>0?`${Math.round(creditUtil*100)}%`:"—", sub:totLim>0?`${fmt(totUsed)} de ${fmt(totLim)}`:"Sin tarjetas registradas", col:creditUtil>0.50?C.red:creditUtil>0.30?C.yellow:C.accent, bar:creditUtil, maxBar:1 },
+          ].map(item=>(
+            <SCard key={item.lbl} style={{ padding:"18px 20px", flex:1 }}>
+              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{item.lbl}</div>
+              <div style={{ color:item.col, fontSize:32, fontWeight:700, fontFamily:F, marginBottom:4 }}>{item.val}</div>
+              <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:12 }}>{item.sub}</div>
+              <ProgressBar value={item.bar} max={item.maxBar} color={item.col} h={6}/>
+            </SCard>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 3. PRESUPUESTO POR PRIORIDAD ─────────────────────────────────── */}
       <SCard>
         <Label>{mes.charAt(0).toUpperCase()+mes.slice(1)} — Presupuesto por prioridad</Label>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
@@ -1132,67 +1188,6 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
               </div>
             );
           })}
-        </div>
-      </SCard>
-
-      {/* ── 3. AHORROS + PLANIFICACIÓN ───────────────────────────────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-
-        <SCard style={{ padding:"18px 22px" }}>
-          <Label>Ahorro acumulado</Label>
-          <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:10 }}>
-            <span style={{ color:C.accent, fontSize:30, fontWeight:700, fontFamily:F }}>{fmt(prevSavings+thisMoSavings)}</span>
-            <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>total</span>
-          </div>
-          <div style={{ marginBottom:12 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-              <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Meta 20% ({fmt(INCOME*0.20)}/mes)</span>
-              <span style={{ color:savR>=0.20?C.accent:savR>0.10?C.yellow:C.red, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(savR*100)}%</span>
-            </div>
-            <ProgressBar value={thisMoSavings} max={INCOME*0.20||1} color={C.accent} h={7}/>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            {[{lbl:"Este mes",val:fmt(thisMoSavings),col:C.blue},{lbl:"Acumulado anterior",val:fmt(prevSavings),col:C.textDim}].map(s=>(
-              <div key={s.lbl} style={{ background:C.surface, borderRadius:10, padding:"10px 14px" }}>
-                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:5 }}>{s.lbl}</div>
-                <div style={{ color:s.col, fontSize:15, fontWeight:700, fontFamily:F }}>{s.val}</div>
-              </div>
-            ))}
-          </div>
-        </SCard>
-
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {[
-            { lbl:"Compromisos del ingreso", val:`${Math.round(committedR*100)}%`,    sub:`${fmt(committed)} fijos + MSI`,                    col:committedR>0.65?C.red:committedR>0.50?C.yellow:C.accent, icon:"📌" },
-            { lbl:"Utilización de crédito",  val:totLim>0?`${Math.round(creditUtil*100)}%`:"—", sub:totLim>0?`${fmt(totUsed)} de ${fmt(totLim)}`:"Sin tarjetas registradas", col:creditUtil>0.50?C.red:creditUtil>0.30?C.yellow:C.accent, icon:"💳" },
-            { lbl:"Posible ahorro del mes",   val:fmt(posibleAhorro),                  sub:"si gastas exactamente lo presupuestado",            col:C.accent, icon:"📈" },
-            { lbl:"Libre tras todo",          val:fmt(Math.max(0,libreTotal)),         sub:libreTotal<0?`Excedido ${fmt(Math.abs(libreTotal))}`:"disponible ahora", col:libreTotal<0?C.red:libreTotal<1000?C.yellow:C.accent, icon:"💵" },
-          ].map(item=>(
-            <SCard key={item.lbl} style={{ padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
-              <span style={{ fontSize:20, flexShrink:0 }}>{item.icon}</span>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.07em" }}>{item.lbl}</div>
-                <div style={{ color:item.col, fontSize:16, fontWeight:700, fontFamily:F }}>{item.val}</div>
-                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>{item.sub}</div>
-              </div>
-            </SCard>
-          ))}
-        </div>
-      </div>
-
-      {/* ── 4. SCORE FINANCIERO ──────────────────────────────────────────── */}
-      <SCard style={{ padding:"18px 22px" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:20 }}>
-          <ScoreGauge score={score}/>
-          <div style={{ flex:1 }}>
-            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>Score financiero</div>
-            <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:13, fontFamily:F, marginBottom:16 }}>
-              {score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 32px" }}>
-              {factors.map(f=><ScoreFactorRow key={f.label} {...f}/>)}
-            </div>
-          </div>
         </div>
       </SCard>
 
