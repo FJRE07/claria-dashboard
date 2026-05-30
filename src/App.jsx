@@ -1076,30 +1076,27 @@ function MSIPlans({ plans, cards }) {
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
 function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards }) {
-  const INCOME = income;
+  const INCOME    = income;
   const totalFixed = fixedItems.reduce((s,f)=>s+f.amt, 0);
   const totalMSI   = msiPlans.reduce((s,p)=>s+p.mo, 0);
   const committed  = totalFixed + totalMSI;
   const committedR = INCOME>0 ? committed/INCOME : 0;
 
-  const gastoVar       = txs.filter(t=>t.amt<0&&t.cat!=="Ahorro").reduce((s,t)=>s+Math.abs(t.amt), 0);
-  const thisMoSavings  = txs.filter(t=>t.cat==="Ahorro").reduce((s,t)=>s+Math.abs(t.amt), 0);
-  const totalPresup    = Object.values(groupBudgets).reduce((s,v)=>s+v, 0);
-  const librePresup    = totalPresup - gastoVar;
-  const libreTotal     = INCOME - committed - gastoVar;
-  const posibleAhorro  = Math.max(0, INCOME - committed - totalPresup);
-  const savR           = INCOME>0 ? thisMoSavings/INCOME : 0;
-  const savRate        = Math.round(Math.max(0,libreTotal)/Math.max(INCOME,1)*100);
-  const totUsed        = cards.reduce((s,c)=>s+c.used, 0);
-  const totLim         = cards.reduce((s,c)=>s+c.lim, 0);
-  const creditUtil     = totLim>0 ? totUsed/totLim : 0;
+  const gastoVar      = txs.filter(t=>t.amt<0&&t.cat!=="Ahorro").reduce((s,t)=>s+Math.abs(t.amt), 0);
+  const thisMoSavings = txs.filter(t=>t.cat==="Ahorro").reduce((s,t)=>s+Math.abs(t.amt), 0);
+  const totalPresup   = Object.values(groupBudgets).reduce((s,v)=>s+v, 0);
+  const librePresup   = totalPresup - gastoVar;
+  const posibleAhorro = Math.max(0, INCOME - committed - totalPresup);
+  const savR          = INCOME>0 ? thisMoSavings/INCOME : 0;
+  const totUsed       = cards.reduce((s,c)=>s+c.used, 0);
+  const totLim        = cards.reduce((s,c)=>s+c.lim, 0);
+  const creditUtil    = totLim>0 ? totUsed/totLim : 0;
 
-  const spentByGroup = txs.reduce((acc,tx)=>{
-    if(tx.amt>=0) return acc;
-    const g=CAT_GROUP[tx.cat]; if(!g) return acc;
-    acc[g]=(acc[g]||0)+Math.abs(tx.amt); return acc;
-  },{});
+  // Promedio ponderado de meses restantes en MSI
+  const msiTotalCommit = msiPlans.reduce((s,p)=>s+p.mo*(p.months-p.paid), 0);
+  const msiAvgMonths   = totalMSI>0 ? Math.round(msiTotalCommit/totalMSI) : 0;
 
+  const savRate = Math.round(Math.max(0, INCOME-committed-gastoVar)/Math.max(INCOME,1)*100);
   const factors = [
     { label:"Compromisos del ingreso", detail:`${Math.round(committedR*100)}% fijos+MSI`,  pts:committedR<0.50?25:committedR<0.65?15:5, maxPts:25 },
     { label:"Tasa libre mensual",      detail:`${savRate}% disponible`,                    pts:savRate>20?25:savRate>10?15:5,            maxPts:25 },
@@ -1107,61 +1104,132 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     { label:"Ahorro del mes",          detail:`${Math.round(savR*100)}% del ingreso`,      pts:savR>0.10?25:savR>0.05?15:5,             maxPts:25 },
   ];
   const score = Math.min(100, factors.reduce((s,f)=>s+f.pts, 0));
-  const mes = new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+
+  // Alertas financieras
+  const alertsEstado = [
+    totalPresup>0 && gastoVar > totalPresup
+      ? { type:"danger", msg:"Presupuesto mensual excedido", sub:`Excediste por ${fmt(gastoVar-totalPresup)}` }
+      : totalPresup>0 && gastoVar > totalPresup*0.85
+      ? { type:"warn",   msg:"Próximo a agotar el presupuesto", sub:`Quedan ${fmt(totalPresup-gastoVar)} (${Math.round((1-gastoVar/totalPresup)*100)}%)` }
+      : null,
+    committedR>0.50
+      ? { type:"danger", msg:`Compromisos > 50% del ingreso (${Math.round(committedR*100)}%)`, sub:`${fmt(committed)} comprometidos de ${fmt(INCOME)}` }
+      : committedR>0.35
+      ? { type:"warn",   msg:`Compromisos al ${Math.round(committedR*100)}% del ingreso`, sub:"Zona de precaución (recomendado < 35%)" }
+      : null,
+    INCOME>0 && totalFixed/INCOME > 0.40
+      ? { type:"warn", msg:`Gastos fijos = ${Math.round(totalFixed/INCOME*100)}% del ingreso`, sub:"Se recomienda no exceder el 40%" }
+      : null,
+    msiPlans.length>0
+      ? { type:"info", msg:`MSI: ${Math.round(totalMSI/Math.max(INCOME,1)*100)}% del ingreso por ~${msiAvgMonths} mes${msiAvgMonths!==1?"es":""}`, sub:`${fmt(totalMSI)}/mes en ${msiPlans.length} plan${msiPlans.length>1?"es":""}` }
+      : null,
+  ].filter(Boolean);
+
+  // Top 5 categorías de gasto + Otros
+  const spentByCat = txs.filter(t=>t.amt<0&&t.cat!=="Ahorro").reduce((acc,tx)=>{ acc[tx.cat]=(acc[tx.cat]||0)+Math.abs(tx.amt); return acc; },{});
+  const sortedCats = Object.entries(spentByCat).sort((a,b)=>b[1]-a[1]);
+  const top5       = sortedCats.slice(0,5);
+  const otrosTotal = sortedCats.slice(5).reduce((s,[,v])=>s+v, 0);
+  const DIST_PALETTE = [C.red,C.blue,C.accent,C.yellow,C.purple];
+  const distData = [
+    ...top5.map(([cat,val],i)=>({ name:cat, value:val, color:EXP_COLORS[cat]||DIST_PALETTE[i] })),
+    ...(otrosTotal>0?[{ name:"Otros", value:otrosTotal, color:C.textDim }]:[]),
+  ];
+
+  // Top 5 categorías del histórico + Otros
+  const histAmounts = {};
+  for (const row of EXPENSE_TREND_RAW) {
+    for (const [k,v] of Object.entries(row)) { if(k!=='m') histAmounts[k]=(histAmounts[k]||0)+v; }
+  }
+  const TOP_HIST = Object.entries(histAmounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([c])=>c);
+  const HIST_COLORS = Object.fromEntries(TOP_HIST.map((c,i)=>[c, EXP_COLORS[c]||DIST_PALETTE[i]]));
+  const histTrend = EXPENSE_TREND_RAW.map(row=>{
+    const otros = Object.entries(row).filter(([k])=>k!=='m'&&!TOP_HIST.includes(k)).reduce((s,[,v])=>s+v,0);
+    const r = { m:row.m };
+    TOP_HIST.forEach(c=>{ r[c]=row[c]||0; });
+    if(otros>0) r['Otros']=otros;
+    return r;
+  });
+  const histCats = [...TOP_HIST, ...(histTrend.some(r=>r['Otros']>0)?['Otros']:[])];
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
-      {/* ── 1. HERO (sin emojis) ─────────────────────────────────────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
-        {[
-          { lbl:"Ingreso mensual",       val:fmt(INCOME),                  col:C.accent, sub:"confirmado este mes" },
-          { lbl:"Gastado hasta hoy",     val:fmt(gastoVar),                col:C.red,    sub:`${INCOME>0?Math.round(gastoVar/INCOME*100):0}% del ingreso` },
-          { lbl:"Libre del presupuesto", val:fmt(Math.max(0,librePresup)), col:librePresup<0?C.red:C.blue, sub:`de ${fmt(totalPresup)} asignado` },
-          { lbl:"Disponible ahora",      val:fmt(Math.max(0,libreTotal)),  col:libreTotal<0?C.red:C.accent, sub:libreTotal<0?"Presupuesto excedido":"tras compromisos y gastos" },
-        ].map(m=>(
-          <SCard key={m.lbl} style={{ padding:"16px 20px" }}>
-            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{m.lbl}</div>
-            <div style={{ color:m.col, fontSize:22, fontWeight:700, fontFamily:F, marginBottom:3 }}>{m.val}</div>
-            <div style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{m.sub}</div>
-          </SCard>
-        ))}
-      </div>
-
-      {/* ── 2. SCORE + AHORRO + PLANIFICACIÓN ────────────────────────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:20 }}>
-
-        {/* Izquierda: Score gauge + Ahorro + Posible ahorro */}
-        <SCard style={{ padding:"20px 24px" }}>
+      {/* ── 1. SCORE + ALERTAS ───────────────────────────────────────────── */}
+      <SCard style={{ padding:"20px 24px" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:24 }}>
           {/* Score */}
-          <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:20, paddingBottom:16, borderBottom:`1px solid ${C.border}` }}>
-            <ScoreGauge score={score}/>
+          <div style={{ display:"flex", alignItems:"flex-start", gap:16 }}>
+            <div style={{ flexShrink:0 }}><ScoreGauge score={score}/></div>
             <div style={{ flex:1 }}>
               <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>Score financiero</div>
-              <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:14, fontWeight:700, fontFamily:F }}>{score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 20px", marginTop:10 }}>
+              <div style={{ color:score>=70?C.accent:score>=40?C.yellow:C.red, fontSize:14, fontWeight:700, fontFamily:F, marginBottom:12 }}>
+                {score>=80?"Excelente":score>=60?"Bueno":score>=40?"Regular":"Crítico"} · {score}/100
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"2px 20px" }}>
                 {factors.map(f=><ScoreFactorRow key={f.label} {...f}/>)}
               </div>
             </div>
           </div>
-          {/* Ahorro */}
+          {/* Alertas */}
+          <div style={{ borderLeft:`1px solid ${C.border}`, paddingLeft:24 }}>
+            <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:12 }}>Alertas financieras</div>
+            {alertsEstado.length===0
+              ? <div style={{ color:C.accent, fontSize:13, fontFamily:F }}>✅ Todo bajo control</div>
+              : <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {alertsEstado.map((a,i)=>{
+                    const col = a.type==="danger"?C.red:a.type==="warn"?C.yellow:C.blue;
+                    return (
+                      <div key={i} style={{ borderLeft:`3px solid ${col}`, paddingLeft:10, background:`${col}10`, borderRadius:"0 8px 8px 0", padding:"8px 12px" }}>
+                        <div style={{ color:C.text, fontSize:12, fontFamily:F, fontWeight:600 }}>{a.msg}</div>
+                        <div style={{ color:C.textDim, fontSize:11, fontFamily:F, marginTop:2 }}>{a.sub}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+            }
+          </div>
+        </div>
+      </SCard>
+
+      {/* ── 2. HERO ──────────────────────────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+        {[
+          { lbl:"Ingreso mensual",           val:fmt(INCOME),              col:C.accent },
+          { lbl:"Gastos fijos del mes",       val:fmt(totalFixed),          col:C.red,    sub:`${INCOME>0?Math.round(totalFixed/INCOME*100):0}% del ingreso` },
+          { lbl:"Comprometido en MSI",        val:fmt(totalMSI),            col:C.yellow, sub:`${INCOME>0?Math.round(totalMSI/INCOME*100):0}% del ingreso/mes` },
+          { lbl:"Presupuesto libre",          val:fmt(Math.max(0,librePresup)), col:librePresup<0?C.red:C.blue, sub:`Gasto variable: ${fmt(gastoVar)} de ${fmt(totalPresup)}` },
+        ].map(m=>(
+          <SCard key={m.lbl} style={{ padding:"16px 20px" }}>
+            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{m.lbl}</div>
+            <div style={{ color:m.col, fontSize:22, fontWeight:700, fontFamily:F, marginBottom:3 }}>{m.val}</div>
+            {m.sub&&<div style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{m.sub}</div>}
+          </SCard>
+        ))}
+      </div>
+
+      {/* ── 3. PLANEACIÓN FINANCIERA ─────────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+
+        {/* Ahorro */}
+        <SCard style={{ padding:"20px 22px" }}>
           <Label>Ahorro acumulado</Label>
           <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
             <span style={{ color:C.accent, fontSize:28, fontWeight:700, fontFamily:F }}>{fmt(prevSavings+thisMoSavings)}</span>
             <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>total</span>
           </div>
-          <div style={{ marginBottom:10 }}>
+          <div style={{ marginBottom:14 }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
               <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Meta 20% ({fmt(INCOME*0.20)}/mes)</span>
               <span style={{ color:savR>=0.20?C.accent:savR>0.10?C.yellow:C.red, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(savR*100)}%</span>
             </div>
             <ProgressBar value={thisMoSavings} max={INCOME*0.20||1} color={C.accent} h={6}/>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
             {[
-              {lbl:"Este mes",         val:fmt(thisMoSavings), col:C.blue},
-              {lbl:"Acum. anterior",   val:fmt(prevSavings),   col:C.textDim},
-              {lbl:"Posible este mes", val:fmt(posibleAhorro), col:C.accent},
+              { lbl:"Este mes",        val:fmt(thisMoSavings), col:C.blue  },
+              { lbl:"Acum. anterior",  val:fmt(prevSavings),   col:C.textDim },
+              { lbl:"Posible ahorro",  val:fmt(posibleAhorro), col:C.accent },
             ].map(s=>(
               <div key={s.lbl} style={{ background:C.surface, borderRadius:10, padding:"10px 12px" }}>
                 <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:4 }}>{s.lbl}</div>
@@ -1171,25 +1239,95 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
           </div>
         </SCard>
 
-        {/* Derecha: Compromisos + Utilización */}
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          {[
-            { lbl:"Compromisos del ingreso", val:`${Math.round(committedR*100)}%`, sub:`${fmt(committed)} fijos + MSI`, col:committedR>0.65?C.red:committedR>0.50?C.yellow:C.accent, bar:committedR, maxBar:1 },
-            { lbl:"Utilización de crédito",  val:totLim>0?`${Math.round(creditUtil*100)}%`:"—", sub:totLim>0?`${fmt(totUsed)} de ${fmt(totLim)}`:"Sin tarjetas registradas", col:creditUtil>0.50?C.red:creditUtil>0.30?C.yellow:C.accent, bar:creditUtil, maxBar:1 },
-          ].map(item=>(
-            <SCard key={item.lbl} style={{ padding:"18px 20px", flex:1 }}>
-              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{item.lbl}</div>
-              <div style={{ color:item.col, fontSize:32, fontWeight:700, fontFamily:F, marginBottom:4 }}>{item.val}</div>
-              <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:12 }}>{item.sub}</div>
-              <ProgressBar value={item.bar} max={item.maxBar} color={item.col} h={6}/>
-            </SCard>
-          ))}
-        </div>
+        {/* Crédito */}
+        <SCard style={{ padding:"20px 22px" }}>
+          <Label>Utilización del crédito</Label>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+            {[
+              { lbl:"Deuda total en tarjetas", val:fmt(totUsed), col:C.red,    sub:totLim>0?`de ${fmt(totLim)} límite`:"Sin tarjetas" },
+              { lbl:"Comprometido en MSI",     val:fmt(totalMSI)+"/mes", col:C.yellow, sub:`${INCOME>0?Math.round(totalMSI/INCOME*100):0}% del ingreso` },
+            ].map(s=>(
+              <div key={s.lbl} style={{ background:C.surface, borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:6 }}>{s.lbl}</div>
+                <div style={{ color:s.col, fontSize:16, fontWeight:700, fontFamily:F }}>{s.val}</div>
+                <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginTop:2 }}>{s.sub}</div>
+              </div>
+            ))}
+          </div>
+          {totLim>0&&<>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+              <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Utilización global</span>
+              <span style={{ color:creditUtil>0.50?C.red:creditUtil>0.30?C.yellow:C.accent, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(creditUtil*100)}%</span>
+            </div>
+            <ProgressBar value={totUsed} max={totLim} h={6}/>
+          </>}
+          {msiAvgMonths>0&&<div style={{ marginTop:14, padding:"10px 14px", background:C.yellowDim, borderRadius:10, border:`1px solid ${C.yellow}30` }}>
+            <div style={{ color:C.yellow, fontSize:12, fontFamily:F, fontWeight:600 }}>En promedio tienes el {Math.round(totalMSI/Math.max(INCOME,1)*100)}% del ingreso comprometido en MSI los próximos ~{msiAvgMonths} meses</div>
+          </div>}
+        </SCard>
       </div>
 
-      {/* ── 3. PRESUPUESTO POR PRIORIDAD ─────────────────────────────────── */}
+      {/* ── 4. DISTRIBUCIÓN DE GASTOS (top 5 + Otros) ───────────────────── */}
+      {distData.length>0&&<SCard>
+        <Label>Distribución de gastos</Label>
+        <PieDistrib data={distData} size={200}/>
+      </SCard>}
+
+      {/* ── 5. HISTÓRICO MENSUAL (top 5 + Otros) ────────────────────────── */}
       <SCard>
-        <Label>{mes.charAt(0).toUpperCase()+mes.slice(1)} — Presupuesto por prioridad</Label>
+        <Label>Histórico de gastos mensual</Label>
+        <div style={{ display:"flex", gap:14, marginBottom:16, flexWrap:"wrap" }}>
+          {histCats.map(cat=><div key={cat} style={{ display:"flex", alignItems:"center", gap:5 }}>
+            <div style={{ width:8, height:8, borderRadius:"50%", background:HIST_COLORS[cat]||C.textDim }}/>
+            <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{cat}</span>
+          </div>)}
+        </div>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={histTrend} barCategoryGap="30%" margin={{ top:0, right:16, bottom:0, left:0 }}>
+            <XAxis dataKey="m" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
+            <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
+            <Tooltip cursor={{ fill:"transparent" }} contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, fontFamily:F, fontSize:12 }}/>
+            {histCats.map((cat,i)=>(
+              <Bar key={cat} dataKey={cat} name={cat} stackId="a"
+                fill={HIST_COLORS[cat]||C.textDim} maxBarSize={64}
+                radius={i===histCats.length-1?[4,4,0,0]:[0,0,0,0]}/>
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </SCard>
+    </div>
+  );
+}
+
+// ── BUDGET — with benchmark references per group ──────────────────────────────
+function Budget({ groupBudgets, setGroupBudgets, income, txs }) {
+  const [cats,setCats]=useState(()=>BUDGET_CATS_DEFAULT.map(c=>({...c,priority:c.defaultP})));
+  const [editGroup,setEditGroup]=useState(null); const [tempVal,setTempVal]=useState("");
+  const [collapsed,setCollapsed]=useState({}); const [showPct,setShowPct]=useState(false);
+  const INCOME=income;
+  const totalBudget=Object.values(groupBudgets).reduce((s,v)=>s+v,0), remaining=INCOME-totalBudget;
+  const spentByGroup=txs.reduce((acc,tx)=>{ if(tx.amt>=0)return acc; const g=CAT_GROUP[tx.cat]; if(!g)return acc; acc[g]=(acc[g]||0)+Math.abs(tx.amt); return acc; },{});
+  const saveGroup=p=>{ const v=parseFloat(tempVal); if(!isNaN(v)&&v>=0) setGroupBudgets(prev=>({...prev,[p]:showPct?Math.round(v/100*INCOME):v})); setEditGroup(null); };
+  const updateP=(id,p)=>setCats(prev=>prev.map(c=>c.id===id?{...c,priority:p}:c));
+  const displayBudget=v=>showPct?`${Math.round(v/INCOME*100)}%`:fmt(v);
+  const pieDat=PRIORITIES.map(p=>({ name:p, value:groupBudgets[p]||0, color:PM[p].color }));
+
+  const mes = new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+
+  return (
+    <div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:24 }}>
+        {[{lbl:"Ingreso mensual",val:fmt(INCOME),col:C.accent},{lbl:"Total presupuestado",val:fmt(totalBudget),col:totalBudget>INCOME?C.red:C.blue},{lbl:"Sin asignar",val:fmt(remaining),col:remaining<0?C.red:C.accent},{lbl:"Grupos",val:PRIORITIES.length,col:C.textDim}].map(m=>(
+          <SCard key={m.lbl} style={{ padding:"16px 18px" }}>
+            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>{m.lbl}</div>
+            <div style={{ color:m.col, fontSize:20, fontWeight:700, fontFamily:F }}>{m.val}</div>
+          </SCard>
+        ))}
+      </div>
+
+      {/* Presupuesto por prioridad — gastado vs asignado */}
+      <SCard style={{ marginBottom:24 }}>
+        <Label>{mes.charAt(0).toUpperCase()+mes.slice(1)} — Real vs presupuesto por prioridad</Label>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
           {PRIORITIES.map(p=>{
             const budget=groupBudgets[p]||0, actual=spentByGroup[p]||0;
@@ -1211,69 +1349,6 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
           })}
         </div>
       </SCard>
-
-      {/* ── 5. GRÁFICOS ──────────────────────────────────────────────────── */}
-      <SCard>
-        <Label>Presupuesto vs real por categoría</Label>
-        <div style={{ display:"flex", gap:20, marginBottom:16 }}>
-          {[{col:C.blue,lbl:"Presupuesto",op:0.5},{col:C.accent,lbl:"Dentro del límite"},{col:C.red,lbl:"Excedido"}].map(l=>(
-            <div key={l.lbl} style={{ display:"flex", alignItems:"center", gap:6 }}><div style={{ width:12, height:12, borderRadius:3, background:l.col, opacity:l.op||1 }}/><span style={{ color:C.textDim, fontSize:12, fontFamily:F }}>{l.lbl}</span></div>
-          ))}
-        </div>
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={BUDGET_VS_REAL} barGap={4} barCategoryGap="28%" margin={{ top:0, right:10, bottom:0, left:0 }}>
-            <XAxis dataKey="cat" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
-            <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
-            <Tooltip cursor={{ fill:"transparent" }} content={<BudgetTip/>}/>
-            <Bar dataKey="bud" name="Presupuesto" fill={C.blue} radius={[4,4,0,0]} opacity={0.45} activeBar={{ opacity:0.45 }}/>
-            <Bar dataKey="real" name="Real" radius={[4,4,0,0]} activeBar={false}>{BUDGET_VS_REAL.map((e,i)=><Cell key={i} fill={e.real>e.bud?C.red:C.accent}/>)}</Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </SCard>
-
-      <SCard>
-        <Label>Gasto histórico mensual</Label>
-        <div style={{ display:"flex", gap:14, marginBottom:16, flexWrap:"wrap" }}>
-          {EXP_CATS.map(cat=><div key={cat} style={{ display:"flex", alignItems:"center", gap:5 }}><div style={{ width:8, height:8, borderRadius:"50%", background:EXP_COLORS[cat] }}/><span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{cat}</span></div>)}
-        </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={EXPENSE_TREND} barCategoryGap="30%" margin={{ top:0, right:16, bottom:0, left:0 }}>
-            <XAxis dataKey="m" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
-            <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
-            <Tooltip cursor={{ fill:"transparent" }} content={<ExpTrendTip/>}/>
-            {EXP_CATS.map((cat,i)=>(
-              <Bar key={cat} dataKey={cat} name={cat} stackId="a" fill={EXP_COLORS[cat]} maxBarSize={64}
-                radius={i===EXP_CATS.length-1?[4,4,0,0]:[0,0,0,0]}/>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </SCard>
-    </div>
-  );
-}
-
-// ── BUDGET — with benchmark references per group ──────────────────────────────
-function Budget({ groupBudgets, setGroupBudgets, income }) {
-  const [cats,setCats]=useState(()=>BUDGET_CATS_DEFAULT.map(c=>({...c,priority:c.defaultP})));
-  const [editGroup,setEditGroup]=useState(null); const [tempVal,setTempVal]=useState("");
-  const [collapsed,setCollapsed]=useState({}); const [showPct,setShowPct]=useState(false);
-  const INCOME=income;
-  const totalBudget=Object.values(groupBudgets).reduce((s,v)=>s+v,0), remaining=INCOME-totalBudget;
-  const saveGroup=p=>{ const v=parseFloat(tempVal); if(!isNaN(v)&&v>=0) setGroupBudgets(prev=>({...prev,[p]:showPct?Math.round(v/100*INCOME):v})); setEditGroup(null); };
-  const updateP=(id,p)=>setCats(prev=>prev.map(c=>c.id===id?{...c,priority:p}:c));
-  const displayBudget=v=>showPct?`${Math.round(v/INCOME*100)}%`:fmt(v);
-  const pieDat=PRIORITIES.map(p=>({ name:p, value:groupBudgets[p]||0, color:PM[p].color }));
-
-  return (
-    <div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:24 }}>
-        {[{lbl:"Ingreso mensual",val:fmt(INCOME),col:C.accent},{lbl:"Total presupuestado",val:fmt(totalBudget),col:totalBudget>INCOME?C.red:C.blue},{lbl:"Sin asignar",val:fmt(remaining),col:remaining<0?C.red:C.accent},{lbl:"Grupos",val:PRIORITIES.length,col:C.textDim}].map(m=>(
-          <SCard key={m.lbl} style={{ padding:"16px 18px" }}>
-            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>{m.lbl}</div>
-            <div style={{ color:m.col, fontSize:20, fontWeight:700, fontFamily:F }}>{m.val}</div>
-          </SCard>
-        ))}
-      </div>
 
       <SCard style={{ marginBottom:24 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -1721,7 +1796,7 @@ function Dashboard({ logout }) {
           {tab==="fixed"        &&<FixedExpenses items={fixedItems} setItems={setFixedItems} income={income}/>}
           {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} onImportDone={cargarDatos}/>}
           {tab==="msi"          &&<MSIPlans      plans={msiPlans} cards={cards}/>}
-          {tab==="budget"       &&<Budget        groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income}/>}
+          {tab==="budget"       &&<Budget        groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income} txs={txs}/>}
           {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards}/>}
         </div>
       </main>
