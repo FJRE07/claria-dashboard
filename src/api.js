@@ -43,7 +43,7 @@ export const getPresupuesto       = ()              => req("GET", "/api/presupue
 export const getPresupuestoGrupos = ()              => req("GET", "/api/presupuesto/grupos");
 export const putPresupuestoGrupo  = (p, monto)      => req("PUT", `/api/presupuesto/grupos/${p}`, { monto });
 export const getTendencia   = (meses = 6) => req("GET", `/api/tendencia?meses=${meses}`);
-export const importCSV      = (csvText)   => req("POST", "/api/import/csv", { csv: csvText });
+export const importCSV      = (csvText, tarjetaId = null) => req("POST", "/api/import/csv", { csv: csvText, tarjeta_id: tarjetaId });
 export const health         = () => req("GET", "/health");
 export const getTarjetas    = ()              => req("GET", "/api/tarjetas");
 export const postTarjeta    = (data)          => req("POST", "/api/tarjetas", data);

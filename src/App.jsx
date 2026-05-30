@@ -151,12 +151,7 @@ const FIXED_DEFAULT = [
   { id:7, name:"CFE Luz",        amt:380,  cat:"Servicios",       icon:"💡", day:8  },
   { id:8, name:"Amazon Prime",   amt:169,  cat:"Entretenimiento", icon:"📦", day:22 },
 ];
-const MSI_DEFAULT = [
-  { id:1, name:"MacBook Air M3", store:"Apple Store", total:28999, months:18, paid:8,  start:"2025-09-01", mo:1611, cardId:null },
-  { id:2, name:'TV OLED LG 55"', store:"Liverpool",   total:18500, months:12, paid:5,  start:"2026-01-01", mo:1542, cardId:null },
-  { id:3, name:"iPhone 16 Pro",  store:"iShop",       total:22999, months:24, paid:3,  start:"2026-03-01", mo:958,  cardId:null },
-  { id:4, name:"Platzi Expert+", store:"Platzi",      total:3200,  months:3,  paid:2,  start:"2026-04-01", mo:1067, cardId:null },
-];
+const MSI_DEFAULT = [];
 const CARD_COLOR_PRESETS = [
   ["#002C7A","#0058C8"],
   ["#880000","#CC1E00"],
@@ -173,22 +168,7 @@ const mapApiCard = (c) => ({
 });
 let _txId = 200;
 const PREV_SAVINGS_DEFAULT = 16500;
-const INIT_TX = [
-  { id:1,  date:"2026-05-28", desc:"Rappi – Sushi Itto",    amt:-420,  cat:"Comida",        icon:"🍣", src:"whatsapp", cardId:null },
-  { id:2,  date:"2026-05-27", desc:"OXXO Bebidas",          amt:-87,   cat:"Comida",        icon:"🥤", src:"whatsapp", cardId:null },
-  { id:3,  date:"2026-05-27", desc:"Salario Quincenal",     amt:18500, cat:"Ingreso",       icon:"💰", src:"manual",   cardId:null },
-  { id:4,  date:"2026-05-26", desc:"Netflix",               amt:-219,  cat:"Suscripciones", icon:"📺", src:"manual",   cardId:null },
-  { id:5,  date:"2026-05-25", desc:"Uber – Trabajo",        amt:-134,  cat:"Transporte",    icon:"🚗", src:"whatsapp", cardId:null },
-  { id:6,  date:"2026-05-24", desc:"Walmart Despensa",      amt:-1240, cat:"Supermercado",  icon:"🛒", src:"whatsapp", cardId:null },
-  { id:7,  date:"2026-05-23", desc:"Smart Fit",             amt:-499,  cat:"Salud",         icon:"🏋️", src:"manual",   cardId:null },
-  { id:8,  date:"2026-05-22", desc:"Amazon – Audífonos",    amt:-1890, cat:"Compras",       icon:"🎧", src:"whatsapp", cardId:null },
-  { id:9,  date:"2026-05-21", desc:"Transferencia BBVA",    amt:3000,  cat:"Ingreso",       icon:"💳", src:"manual",   cardId:null },
-  { id:10, date:"2026-05-18", desc:"Gasolina PEMEX",        amt:-650,  cat:"Transporte",    icon:"⛽", src:"whatsapp", cardId:null },
-  { id:11, date:"2026-05-17", desc:"Farmacia Guadalajara",  amt:-340,  cat:"Salud",         icon:"💊", src:"whatsapp", cardId:null },
-  { id:12, date:"2026-05-15", desc:"Spotify Family",        amt:-119,  cat:"Suscripciones", icon:"🎵", src:"manual",   cardId:null },
-  { id:13, date:"2026-05-10", desc:"CETES – Ahorro mensual",amt:-2000, cat:"Ahorro",        icon:"📈", src:"manual",   cardId:null },
-  { id:14, date:"2026-05-03", desc:"GBM – Inversión",       amt:-1500, cat:"Ahorro",        icon:"📊", src:"manual",   cardId:null },
-];
+const INIT_TX = [];
 const EXP_CATS   = ["Supermercado","Salud","Transporte","Compras","Comida","Suscripciones"];
 const EXP_COLORS = { Comida:"#FF4560", Transporte:"#3D8EF5", Salud:"#00D4A0", Compras:"#9B7BFF", Suscripciones:"#FFBA2C", Supermercado:"#22D3EE" };
 const EXPENSE_TREND_RAW = [
@@ -484,6 +464,71 @@ function CardDetailModal({ card, txs, msiPlans, onClose }) {
   );
 }
 
+// ── IMPORT MODAL ──────────────────────────────────────────────────────────────
+function ImportModal({ card, onDone, onClose }) {
+  const [archivo, setArchivo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState("");
+
+  const importar = async () => {
+    if (!archivo) return;
+    setBusy(true); setErr("");
+    try {
+      const csv = await archivo.text();
+      const r = await API.importCSV(csv, card.id);
+      setResult(r);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:460, background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:"24px 28px", animation:"slideUp .25s ease" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div>
+            <div style={{ color:C.text, fontSize:16, fontWeight:600, fontFamily:F }}>Importar estado de cuenta</div>
+            <div style={{ color:C.textMuted, fontSize:12, fontFamily:F, marginTop:3 }}>💳 {card.name} · {card.bank}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textDim, fontSize:18 }}>✕</button>
+        </div>
+
+        {!result ? <>
+          <div style={{ background:C.card, border:`2px dashed ${C.border}`, borderRadius:12, padding:"28px 20px", textAlign:"center", marginBottom:16 }}>
+            <div style={{ color:C.textMuted, fontSize:13, fontFamily:F, marginBottom:12 }}>Selecciona el CSV exportado desde BBVA</div>
+            <input type="file" accept=".csv" onChange={e=>setArchivo(e.target.files[0])} style={{ color:C.text, fontFamily:F, fontSize:13 }}/>
+            {archivo&&<div style={{ color:C.accent, fontSize:12, fontFamily:F, marginTop:10 }}>✓ {archivo.name}</div>}
+          </div>
+          <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, lineHeight:1.6, marginBottom:16 }}>
+            En BBVA: <strong style={{ color:C.textDim }}>Estados de cuenta → Descargar CSV</strong>. Las transacciones ya importadas se ignoran automáticamente.
+          </div>
+          {err&&<div style={{ color:C.red, fontSize:12, fontFamily:F, marginBottom:12 }}>{err}</div>}
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <button onClick={onClose} style={BtnS}>Cancelar</button>
+            <button onClick={importar} disabled={busy||!archivo} style={{ ...BtnP, opacity:(!archivo||busy)?0.5:1 }}>{busy?"Importando…":"Importar"}</button>
+          </div>
+        </> : <>
+          <div style={{ background:C.accentDim, border:`1px solid ${C.accentGlow}`, borderRadius:12, padding:"20px 24px", marginBottom:20, textAlign:"center" }}>
+            <div style={{ color:C.accent, fontSize:32, marginBottom:8 }}>✓</div>
+            <div style={{ color:C.text, fontSize:15, fontWeight:600, fontFamily:F }}>Importación completada</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginTop:14 }}>
+              {[{lbl:"Transacciones",val:result.transacciones},{lbl:"Planes MSI",val:result.msi}].map(m=>(
+                <div key={m.lbl} style={{ background:C.card, borderRadius:10, padding:"10px 14px" }}>
+                  <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase" }}>{m.lbl}</div>
+                  <div style={{ color:C.accent, fontSize:20, fontWeight:700, fontFamily:F }}>{m.val}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display:"flex", justifyContent:"flex-end" }}>
+            <button onClick={onDone} style={BtnP}>Listo</button>
+          </div>
+        </>}
+      </div>
+    </div>
+  );
+}
+
 // ── CARD MODAL ────────────────────────────────────────────────────────────────
 function CardModal({ card, onSave, onClose }) {
   const isNew=!card.id;
@@ -637,10 +682,11 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
 }
 
 // ── CREDIT CARDS ──────────────────────────────────────────────────────────────
-function CreditCards({ txs, cards, setCards, setTxs, msiPlans }) {
+function CreditCards({ txs, cards, setCards, setTxs, msiPlans, onImportDone }) {
   const [selected,setSelected]=useState(null);
   const [editCard,setEditCard]=useState(null);
   const [adding,setAdding]=useState(false);
+  const [importCard,setImportCard]=useState(null);
 
   const totUsed=cards.reduce((s,c)=>s+c.used,0), totLim=cards.reduce((s,c)=>s+c.lim,0);
 
@@ -708,6 +754,9 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans }) {
                       ))}
                     </div>
                     <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                      <button onClick={()=>setImportCard(c)} style={{ flex:1, ...BtnP, fontSize:12, padding:"6px 0", background:C.blue }}>↑ Importar estado</button>
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginTop:8 }}>
                       <button onClick={()=>setEditCard(c)} style={{ flex:1, ...BtnS, fontSize:12, padding:"6px 0" }}>✏️ Editar</button>
                       <button onClick={()=>deleteCard(c.id)} style={{ ...BtnS, fontSize:12, padding:"6px 12px", color:C.red, borderColor:C.red+"55" }}>🗑</button>
                     </div>
@@ -732,6 +781,11 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans }) {
         card={editCard?{id:editCard.id,nombre:editCard.name,banco:editCard.bank,last4:editCard.last4,limite:editCard.lim,saldo_usado:editCard.used,dia_corte:editCard.cut,dia_pago:editCard.pay,color_inicio:editCard.clr[0],color_fin:editCard.clr[1]}:{}}
         onSave={saveCard}
         onClose={()=>{setAdding(false);setEditCard(null);}}
+      />}
+      {importCard&&<ImportModal
+        card={importCard}
+        onDone={()=>{ setImportCard(null); onImportDone(); }}
+        onClose={()=>setImportCard(null)}
       />}
     </div>
   );
@@ -1534,7 +1588,7 @@ function Dashboard({ logout }) {
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px" }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}/>}
           {tab==="fixed"        &&<FixedExpenses items={fixedItems} setItems={setFixedItems} income={income}/>}
-          {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans}/>}
+          {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} onImportDone={cargarDatos}/>}
           {tab==="msi"          &&<MSIPlans      plans={msiPlans} cards={cards}/>}
           {tab==="budget"       &&<Budget        groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income}/>}
           {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards}/>}
