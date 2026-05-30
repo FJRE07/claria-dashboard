@@ -45,3 +45,7 @@ export const putPresupuestoGrupo  = (p, monto)      => req("PUT", `/api/presupue
 export const getTendencia   = (meses = 6) => req("GET", `/api/tendencia?meses=${meses}`);
 export const importCSV      = (csvText)   => req("POST", "/api/import/csv", { csv: csvText });
 export const health         = () => req("GET", "/health");
+export const getTarjetas    = ()              => req("GET", "/api/tarjetas");
+export const postTarjeta    = (data)          => req("POST", "/api/tarjetas", data);
+export const putTarjeta     = (id, data)      => req("PUT", `/api/tarjetas/${id}`, data);
+export const deleteTarjeta  = (id)            => req("DELETE", `/api/tarjetas/${id}`);

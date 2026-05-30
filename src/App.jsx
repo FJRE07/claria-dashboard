@@ -109,7 +109,7 @@ const mapApiTx = (t) => ({
   cat: API_TO_DASH_CAT[t.categoria] ?? t.categoria ?? "Otros",
   icon: CAT_ICONS[API_TO_DASH_CAT[t.categoria]] ?? "💸",
   src: t.via ?? "manual",
-  cardId: null,
+  cardId: t.tarjeta_id ?? null,
 });
 
 const GRUPO_ICON = {
@@ -135,7 +135,7 @@ const mapApiMsi = (m, i) => ({
   paid: Number((m.total_pagos ?? 12) - (m.pagos_restantes ?? 0)),
   start: String(m.fecha_inicio ?? new Date().toISOString().slice(0, 10)).slice(0, 10),
   mo: Number(m.cuota_mensual ?? 0),
-  cardId: null,
+  cardId: m.tarjeta_id ?? null,
 });
 
 const CAT_GROUP = { Supermercado:"Esencial", Salud:"Esencial", Comida:"Importante", Ahorro:"Importante", Transporte:"Flexible", Compras:"Flexible", Otros:"Flexible", Suscripciones:"Prescindible", Ingreso:null };
@@ -152,31 +152,40 @@ const FIXED_DEFAULT = [
   { id:8, name:"Amazon Prime",   amt:169,  cat:"Entretenimiento", icon:"📦", day:22 },
 ];
 const MSI_DEFAULT = [
-  { id:1, name:"MacBook Air M3", store:"Apple Store", total:28999, months:18, paid:8,  start:"2025-09-01", mo:1611, cardId:2 },
-  { id:2, name:'TV OLED LG 55"', store:"Liverpool",   total:18500, months:12, paid:5,  start:"2026-01-01", mo:1542, cardId:1 },
-  { id:3, name:"iPhone 16 Pro",  store:"iShop",       total:22999, months:24, paid:3,  start:"2026-03-01", mo:958,  cardId:2 },
-  { id:4, name:"Platzi Expert+", store:"Platzi",      total:3200,  months:3,  paid:2,  start:"2026-04-01", mo:1067, cardId:3 },
+  { id:1, name:"MacBook Air M3", store:"Apple Store", total:28999, months:18, paid:8,  start:"2025-09-01", mo:1611, cardId:null },
+  { id:2, name:'TV OLED LG 55"', store:"Liverpool",   total:18500, months:12, paid:5,  start:"2026-01-01", mo:1542, cardId:null },
+  { id:3, name:"iPhone 16 Pro",  store:"iShop",       total:22999, months:24, paid:3,  start:"2026-03-01", mo:958,  cardId:null },
+  { id:4, name:"Platzi Expert+", store:"Platzi",      total:3200,  months:3,  paid:2,  start:"2026-04-01", mo:1067, cardId:null },
 ];
-const CARDS = [
-  { id:1, name:"Azul BBVA",       bank:"BBVA",        clr:["#002C7A","#0058C8"], last4:"4521", lim:35000, used:12840, cut:12, pay:7  },
-  { id:2, name:"Oro Citibanamex", bank:"Citibanamex", clr:["#880000","#CC1E00"], last4:"7893", lim:50000, used:28500, cut:22, pay:17 },
-  { id:3, name:"Green AMEX",      bank:"AMEX",        clr:["#003F6B","#006EA8"], last4:"1029", lim:80000, used:5200,  cut:5,  pay:28 },
+const CARD_COLOR_PRESETS = [
+  ["#002C7A","#0058C8"],
+  ["#880000","#CC1E00"],
+  ["#003F6B","#006EA8"],
+  ["#1A4731","#276749"],
+  ["#2D1B69","#5B2D8E"],
 ];
+const mapApiCard = (c) => ({
+  id: c.id, name: c.nombre, bank: c.banco,
+  clr: [c.color_inicio||"#002C7A", c.color_fin||"#0058C8"],
+  last4: c.last4, lim: Number(c.limite),
+  used: Number(c.saldo_usado||0),
+  cut: Number(c.dia_corte), pay: Number(c.dia_pago),
+});
 let _txId = 200;
 const PREV_SAVINGS_DEFAULT = 16500;
 const INIT_TX = [
-  { id:1,  date:"2026-05-28", desc:"Rappi – Sushi Itto",    amt:-420,  cat:"Comida",        icon:"🍣", src:"whatsapp", cardId:1    },
-  { id:2,  date:"2026-05-27", desc:"OXXO Bebidas",          amt:-87,   cat:"Comida",        icon:"🥤", src:"whatsapp", cardId:2    },
+  { id:1,  date:"2026-05-28", desc:"Rappi – Sushi Itto",    amt:-420,  cat:"Comida",        icon:"🍣", src:"whatsapp", cardId:null },
+  { id:2,  date:"2026-05-27", desc:"OXXO Bebidas",          amt:-87,   cat:"Comida",        icon:"🥤", src:"whatsapp", cardId:null },
   { id:3,  date:"2026-05-27", desc:"Salario Quincenal",     amt:18500, cat:"Ingreso",       icon:"💰", src:"manual",   cardId:null },
-  { id:4,  date:"2026-05-26", desc:"Netflix",               amt:-219,  cat:"Suscripciones", icon:"📺", src:"manual",   cardId:1    },
-  { id:5,  date:"2026-05-25", desc:"Uber – Trabajo",        amt:-134,  cat:"Transporte",    icon:"🚗", src:"whatsapp", cardId:2    },
-  { id:6,  date:"2026-05-24", desc:"Walmart Despensa",      amt:-1240, cat:"Supermercado",  icon:"🛒", src:"whatsapp", cardId:1    },
-  { id:7,  date:"2026-05-23", desc:"Smart Fit",             amt:-499,  cat:"Salud",         icon:"🏋️", src:"manual",   cardId:3    },
-  { id:8,  date:"2026-05-22", desc:"Amazon – Audífonos",    amt:-1890, cat:"Compras",       icon:"🎧", src:"whatsapp", cardId:2    },
+  { id:4,  date:"2026-05-26", desc:"Netflix",               amt:-219,  cat:"Suscripciones", icon:"📺", src:"manual",   cardId:null },
+  { id:5,  date:"2026-05-25", desc:"Uber – Trabajo",        amt:-134,  cat:"Transporte",    icon:"🚗", src:"whatsapp", cardId:null },
+  { id:6,  date:"2026-05-24", desc:"Walmart Despensa",      amt:-1240, cat:"Supermercado",  icon:"🛒", src:"whatsapp", cardId:null },
+  { id:7,  date:"2026-05-23", desc:"Smart Fit",             amt:-499,  cat:"Salud",         icon:"🏋️", src:"manual",   cardId:null },
+  { id:8,  date:"2026-05-22", desc:"Amazon – Audífonos",    amt:-1890, cat:"Compras",       icon:"🎧", src:"whatsapp", cardId:null },
   { id:9,  date:"2026-05-21", desc:"Transferencia BBVA",    amt:3000,  cat:"Ingreso",       icon:"💳", src:"manual",   cardId:null },
-  { id:10, date:"2026-05-18", desc:"Gasolina PEMEX",        amt:-650,  cat:"Transporte",    icon:"⛽", src:"whatsapp", cardId:1    },
-  { id:11, date:"2026-05-17", desc:"Farmacia Guadalajara",  amt:-340,  cat:"Salud",         icon:"💊", src:"whatsapp", cardId:3    },
-  { id:12, date:"2026-05-15", desc:"Spotify Family",        amt:-119,  cat:"Suscripciones", icon:"🎵", src:"manual",   cardId:1    },
+  { id:10, date:"2026-05-18", desc:"Gasolina PEMEX",        amt:-650,  cat:"Transporte",    icon:"⛽", src:"whatsapp", cardId:null },
+  { id:11, date:"2026-05-17", desc:"Farmacia Guadalajara",  amt:-340,  cat:"Salud",         icon:"💊", src:"whatsapp", cardId:null },
+  { id:12, date:"2026-05-15", desc:"Spotify Family",        amt:-119,  cat:"Suscripciones", icon:"🎵", src:"manual",   cardId:null },
   { id:13, date:"2026-05-10", desc:"CETES – Ahorro mensual",amt:-2000, cat:"Ahorro",        icon:"📈", src:"manual",   cardId:null },
   { id:14, date:"2026-05-03", desc:"GBM – Inversión",       amt:-1500, cat:"Ahorro",        icon:"📊", src:"manual",   cardId:null },
 ];
@@ -361,7 +370,7 @@ const IS = { background:C.surface, border:`1px solid ${C.border}`, borderRadius:
 const BtnP = { background:C.accent, border:"none", borderRadius:8, color:C.bg, padding:"8px 18px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:F };
 const BtnS = { background:"transparent", border:`1px solid ${C.border}`, borderRadius:8, color:C.textDim, padding:"8px 18px", cursor:"pointer", fontSize:13, fontFamily:F };
 
-function TxModal({ tx, onSave, onClose }) {
+function TxModal({ tx, cards, onSave, onClose }) {
   const [d,setD]=useState({...tx});
   const isNew=!tx.id;
   const save=()=>{ if(!d.desc||!d.amt)return; onSave({...d,id:d.id||++_txId,amt:parseFloat(d.amt)||0,icon:CAT_ICONS[d.cat]||"💸"}); onClose(); };
@@ -378,7 +387,7 @@ function TxModal({ tx, onSave, onClose }) {
           ))}
           <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Monto (negativo = gasto)</div><input type="number" value={d.amt||""} onChange={e=>setD(p=>({...p,amt:e.target.value}))} placeholder="-350" style={IS}/></div>
           <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Categoría</div><select value={d.cat||"Comida"} onChange={e=>setD(p=>({...p,cat:e.target.value}))} style={IS}>{TX_CATS.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Tarjeta</div><select value={d.cardId||""} onChange={e=>setD(p=>({...p,cardId:e.target.value?parseInt(e.target.value):null}))} style={IS}><option value="">Sin tarjeta</option>{CARDS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Tarjeta</div><select value={d.cardId||""} onChange={e=>setD(p=>({...p,cardId:e.target.value?parseInt(e.target.value):null}))} style={IS}><option value="">Sin tarjeta</option>{cards.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Origen</div><select value={d.src||"manual"} onChange={e=>setD(p=>({...p,src:e.target.value}))} style={IS}><option value="manual">Manual</option><option value="whatsapp">WhatsApp</option></select></div>
         </div>
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
@@ -418,9 +427,9 @@ function FixedModal({ item, onSave, onClose }) {
 }
 
 // ── CARD DETAIL MODAL ─────────────────────────────────────────────────────────
-function CardDetailModal({ card, txs, onClose }) {
+function CardDetailModal({ card, txs, msiPlans, onClose }) {
   const cardTxs=txs.filter(t=>t.cardId===card.id&&t.amt<0);
-  const msiPlans=MSI.filter(m=>m.cardId===card.id);
+  const cardMsi=msiPlans.filter(m=>m.cardId===card.id);
   const totalSpent=cardTxs.reduce((s,t)=>s+Math.abs(t.amt),0);
   const byCat=cardTxs.reduce((acc,t)=>{ acc[t.cat]=(acc[t.cat]||0)+Math.abs(t.amt); return acc; },{});
   return (
@@ -452,9 +461,9 @@ function CardDetailModal({ card, txs, onClose }) {
               <ProgressBar value={amt} max={totalSpent} h={4}/>
             </div>
           ))}
-          {msiPlans.length>0&&<div style={{ margin:"16px 0" }}>
+          {cardMsi.length>0&&<div style={{ margin:"16px 0" }}>
             <Label>Planes MSI</Label>
-            {msiPlans.map(p=>(
+            {cardMsi.map(p=>(
               <div key={p.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 16px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <div><div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:500 }}>{p.name}</div><div style={{ color:C.textMuted, fontSize:11 }}>{p.paid}/{p.months} cuotas</div></div>
                 <div style={{ color:C.yellow, fontSize:14, fontWeight:700, fontFamily:F }}>{fmt(p.mo)}/mes</div>
@@ -475,10 +484,60 @@ function CardDetailModal({ card, txs, onClose }) {
   );
 }
 
+// ── CARD MODAL ────────────────────────────────────────────────────────────────
+function CardModal({ card, onSave, onClose }) {
+  const isNew=!card.id;
+  const [d,setD]=useState({
+    nombre: card.nombre||"", banco: card.banco||"BBVA", last4: card.last4||"",
+    limite: card.limite!=null?String(card.limite):"", saldo_usado: card.saldo_usado!=null?String(card.saldo_usado):"0",
+    dia_corte: card.dia_corte||15, dia_pago: card.dia_pago||10,
+    color_inicio: card.color_inicio||"#002C7A", color_fin: card.color_fin||"#0058C8",
+  });
+  const [busy,setBusy]=useState(false);
+  const save=async()=>{
+    if(!d.nombre||!d.last4)return;
+    setBusy(true);
+    try{ await onSave({...d, limite:parseFloat(d.limite)||0, saldo_usado:parseFloat(d.saldo_usado)||0, dia_corte:parseInt(d.dia_corte)||15, dia_pago:parseInt(d.dia_pago)||10}); onClose(); }
+    finally{ setBusy(false); }
+  };
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:480, background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:"24px 28px", animation:"slideUp .25s ease" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <div style={{ color:C.text, fontSize:16, fontWeight:600, fontFamily:F }}>{isNew?"Nueva tarjeta":"Editar tarjeta"}</div>
+          <button onClick={onClose} style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textDim, fontSize:18 }}>✕</button>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+          <div style={{ gridColumn:"1/-1" }}><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Nombre</div><input value={d.nombre} onChange={e=>setD(p=>({...p,nombre:e.target.value}))} placeholder="ej: Azul BBVA" style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Banco</div><input value={d.banco} onChange={e=>setD(p=>({...p,banco:e.target.value}))} placeholder="BBVA" style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Últimos 4 dígitos</div><input value={d.last4} onChange={e=>setD(p=>({...p,last4:e.target.value}))} placeholder="4521" maxLength={4} style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Límite de crédito</div><input type="number" value={d.limite} onChange={e=>setD(p=>({...p,limite:e.target.value}))} placeholder="50000" style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Saldo actual usado</div><input type="number" value={d.saldo_usado} onChange={e=>setD(p=>({...p,saldo_usado:e.target.value}))} placeholder="0" style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Día de corte</div><input type="number" min="1" max="31" value={d.dia_corte} onChange={e=>setD(p=>({...p,dia_corte:parseInt(e.target.value)||15}))} style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Día de pago</div><input type="number" min="1" max="31" value={d.dia_pago} onChange={e=>setD(p=>({...p,dia_pago:parseInt(e.target.value)||10}))} style={IS}/></div>
+        </div>
+        <div style={{ marginBottom:18 }}>
+          <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:8 }}>Color de la tarjeta</div>
+          <div style={{ display:"flex", gap:8 }}>
+            {CARD_COLOR_PRESETS.map(([c1,c2])=>(
+              <div key={c1} onClick={()=>setD(p=>({...p,color_inicio:c1,color_fin:c2}))}
+                style={{ width:40, height:24, borderRadius:7, background:`linear-gradient(135deg,${c1},${c2})`, cursor:"pointer", border:d.color_inicio===c1?`2px solid ${C.accent}`:`2px solid transparent`, transition:"border 0.15s" }}/>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={BtnS}>Cancelar</button>
+          <button onClick={save} disabled={busy} style={BtnP}>{busy?"Guardando…":"Guardar"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── TRANSACTIONS ──────────────────────────────────────────────────────────────
 const TIPOS_EXCLUIR = ["pago","msi_cuota","abono_puntos","abono"];
 
-function Transactions({ txs, setTxs, onAdd }) {
+function Transactions({ txs, setTxs, onAdd, cards }) {
   const [type,setType]=useState("all"); const [catF,setCatF]=useState("all");
   const [cardF,setCardF]=useState("all"); const [from,setFrom]=useState(""); const [to,setTo]=useState("");
   const [editTx,setEditTx]=useState(null); const [addingTx,setAddingTx]=useState(false);
@@ -532,7 +591,7 @@ function Transactions({ txs, setTxs, onAdd }) {
         <div style={{ width:1, height:18, background:C.border, margin:"0 4px" }}/>
         <select value={cardF} onChange={e=>setCardF(e.target.value)} style={sel}>
           <option value="all">Todas las tarjetas</option><option value="sin">Sin tarjeta</option>
-          {CARDS.map(c=><option key={c.id} value={c.id.toString()}>{c.name}</option>)}
+          {cards.map(c=><option key={c.id} value={c.id.toString()}>{c.name}</option>)}
         </select>
         <div style={{ width:1, height:18, background:C.border, margin:"0 4px" }}/>
         <input type="date" value={from} onChange={e=>setFrom(e.target.value)} style={sel}/>
@@ -549,7 +608,7 @@ function Transactions({ txs, setTxs, onAdd }) {
           : list.length===0
             ? <div style={{ color:C.textMuted, fontSize:14, fontFamily:F, textAlign:"center", padding:"40px 0" }}>Sin transacciones con esos filtros</div>
             : list.map((tx,i)=>{
-                const card=CARDS.find(c=>c.id===tx.cardId);
+                const card=cards.find(c=>c.id===tx.cardId);
                 return (
                   <div key={tx.id} style={{ display:"grid", gridTemplateColumns:"44px 34px 1fr 78px 110px 96px 140px 72px 76px", padding:"11px 14px", background:C.card, border:`1px solid ${C.border}`, borderRadius:12, alignItems:"center", fontFamily:F, animation:`fadeIn .2s ease ${i*0.02}s both` }}>
                     <div style={{ color:C.textMuted, fontSize:10, fontFamily:"'IBM Plex Mono',monospace" }}>#{tx.id}</div>
@@ -572,63 +631,108 @@ function Transactions({ txs, setTxs, onAdd }) {
               })
         }
       </div>
-      {(editTx||addingTx)&&<TxModal tx={editTx||{date:todayStr(),desc:"",amt:"",cat:"Comida",src:"manual",cardId:null}} onSave={saveTx} onClose={()=>{setEditTx(null);setAddingTx(false);}}/>}
+      {(editTx||addingTx)&&<TxModal tx={editTx||{date:todayStr(),desc:"",amt:"",cat:"Comida",src:"manual",cardId:null}} cards={cards} onSave={saveTx} onClose={()=>{setEditTx(null);setAddingTx(false);}}/>}
     </div>
   );
 }
 
 // ── CREDIT CARDS ──────────────────────────────────────────────────────────────
-function CreditCards({ txs }) {
+function CreditCards({ txs, cards, setCards, setTxs, msiPlans }) {
   const [selected,setSelected]=useState(null);
-  const totUsed=CARDS.reduce((s,c)=>s+c.used,0), totLim=CARDS.reduce((s,c)=>s+c.lim,0);
+  const [editCard,setEditCard]=useState(null);
+  const [adding,setAdding]=useState(false);
+
+  const totUsed=cards.reduce((s,c)=>s+c.used,0), totLim=cards.reduce((s,c)=>s+c.lim,0);
+
+  const saveCard=async(data)=>{
+    try {
+      if(data.id){
+        const updated=await API.putTarjeta(data.id, data);
+        setCards(prev=>prev.map(c=>c.id===updated.id?mapApiCard(updated):c));
+      } else {
+        const created=await API.postTarjeta(data);
+        const mapped=mapApiCard(created);
+        setCards(prev=>[...prev,mapped]);
+        // Si es la primera tarjeta, asignar localmente todas las txs sin tarjeta
+        setCards(prev=>{ if(prev.length===1) setTxs(p=>p.map(t=>t.cardId?t:{...t,cardId:mapped.id})); return prev; });
+      }
+    } catch(e){ console.error("Error guardando tarjeta:",e); }
+  };
+
+  const deleteCard=async(id)=>{
+    if(!confirm("¿Eliminar esta tarjeta? Las transacciones no se borran."))return;
+    try{ await API.deleteTarjeta(id); setCards(prev=>prev.filter(c=>c.id!==id)); }
+    catch(e){ console.error("Error eliminando tarjeta:",e); }
+  };
+
   return (
     <div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:20, marginBottom:24 }}>
-        {CARDS.map(c=>(
-          <div key={c.id} onClick={()=>setSelected(c)} style={{ borderRadius:20, overflow:"hidden", border:`1px solid ${C.border}`, cursor:"pointer", transition:"transform 0.18s, box-shadow 0.18s" }}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 40px rgba(0,0,0,0.5)";}}
-            onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
-            <div style={{ background:`linear-gradient(135deg,${c.clr[0]},${c.clr[1]})`, padding:"24px 28px 20px", position:"relative", overflow:"hidden" }}>
-              <div style={{ position:"absolute", right:-24, top:-24, width:110, height:110, borderRadius:"50%", background:"rgba(255,255,255,0.05)" }}/>
-              <div style={{ display:"flex", justifyContent:"space-between" }}>
-                <div><div style={{ color:"rgba(255,255,255,0.55)", fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.12em" }}>{c.bank}</div><div style={{ color:"#fff", fontSize:17, fontWeight:700, fontFamily:F, marginTop:4 }}>{c.name}</div></div>
-                <div style={{ color:"rgba(255,255,255,0.8)", fontSize:26 }}>💳</div>
-              </div>
-              <div style={{ color:"rgba(255,255,255,0.45)", fontSize:14, fontFamily:F, marginTop:18, letterSpacing:"0.18em" }}>•••• •••• •••• {c.last4}</div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:18 }}>
-                <div><div style={{ color:"rgba(255,255,255,0.45)", fontSize:10, fontFamily:F, textTransform:"uppercase" }}>Saldo usado</div><div style={{ color:"#fff", fontSize:20, fontWeight:700, fontFamily:F }}>{fmt(c.used)}</div></div>
-                <div style={{ textAlign:"right" }}><div style={{ color:"rgba(255,255,255,0.45)", fontSize:10, fontFamily:F, textTransform:"uppercase" }}>Límite</div><div style={{ color:"rgba(255,255,255,0.75)", fontSize:16, fontFamily:F }}>{fmt(c.lim)}</div></div>
-              </div>
-            </div>
-            <div style={{ background:C.card, padding:"16px 28px 18px" }}>
-              <ProgressBar value={c.used} max={c.lim} h={7}/>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
-                <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{((c.used/c.lim)*100).toFixed(0)}% utilizado</span>
-                <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{fmt(c.lim-c.used)} disponible</span>
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:14 }}>
-                {[{lbl:"Corte",val:`Día ${c.cut}`,sub:`en ${daysTo(c.cut)} días`,col:C.yellow},{lbl:"Pago límite",val:`Día ${c.pay}`,sub:`en ${daysTo(c.pay)} días`,col:daysTo(c.pay)<=5?C.red:C.accent}].map(item=>(
-                  <div key={item.lbl} style={{ background:C.surface, borderRadius:10, padding:"10px 14px" }}>
-                    <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:4 }}>{item.lbl}</div>
-                    <div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:600 }}>{item.val}</div>
-                    <div style={{ color:item.col, fontSize:11, fontFamily:F, marginTop:2 }}>{item.sub}</div>
+      {cards.length===0
+        ? <div style={{ textAlign:"center", padding:"60px 0" }}>
+            <div style={{ color:C.textMuted, fontSize:14, fontFamily:F, marginBottom:20 }}>No tienes tarjetas registradas.</div>
+            <button onClick={()=>setAdding(true)} style={BtnP}>+ Agregar tarjeta</button>
+          </div>
+        : <>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:20, marginBottom:24 }}>
+              {cards.map(c=>(
+                <div key={c.id} style={{ borderRadius:20, overflow:"hidden", border:`1px solid ${C.border}`, transition:"transform 0.18s, box-shadow 0.18s" }}
+                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 40px rgba(0,0,0,0.5)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
+                  <div onClick={()=>setSelected(c)} style={{ background:`linear-gradient(135deg,${c.clr[0]},${c.clr[1]})`, padding:"24px 28px 20px", position:"relative", overflow:"hidden", cursor:"pointer" }}>
+                    <div style={{ position:"absolute", right:-24, top:-24, width:110, height:110, borderRadius:"50%", background:"rgba(255,255,255,0.05)" }}/>
+                    <div style={{ display:"flex", justifyContent:"space-between" }}>
+                      <div><div style={{ color:"rgba(255,255,255,0.55)", fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.12em" }}>{c.bank}</div><div style={{ color:"#fff", fontSize:17, fontWeight:700, fontFamily:F, marginTop:4 }}>{c.name}</div></div>
+                      <div style={{ color:"rgba(255,255,255,0.8)", fontSize:26 }}>💳</div>
+                    </div>
+                    <div style={{ color:"rgba(255,255,255,0.45)", fontSize:14, fontFamily:F, marginTop:18, letterSpacing:"0.18em" }}>•••• •••• •••• {c.last4}</div>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginTop:18 }}>
+                      <div><div style={{ color:"rgba(255,255,255,0.45)", fontSize:10, fontFamily:F, textTransform:"uppercase" }}>Saldo usado</div><div style={{ color:"#fff", fontSize:20, fontWeight:700, fontFamily:F }}>{fmt(c.used)}</div></div>
+                      <div style={{ textAlign:"right" }}><div style={{ color:"rgba(255,255,255,0.45)", fontSize:10, fontFamily:F, textTransform:"uppercase" }}>Límite</div><div style={{ color:"rgba(255,255,255,0.75)", fontSize:16, fontFamily:F }}>{c.lim>0?fmt(c.lim):"—"}</div></div>
+                    </div>
                   </div>
+                  <div style={{ background:C.card, padding:"16px 28px 18px" }}>
+                    {c.lim>0&&<>
+                      <ProgressBar value={c.used} max={c.lim} h={7}/>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
+                        <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{((c.used/c.lim)*100).toFixed(0)}% utilizado</span>
+                        <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{fmt(c.lim-c.used)} disponible</span>
+                      </div>
+                    </>}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:c.lim>0?14:0 }}>
+                      {[{lbl:"Corte",val:`Día ${c.cut}`,sub:`en ${daysTo(c.cut)} días`,col:C.yellow},{lbl:"Pago límite",val:`Día ${c.pay}`,sub:`en ${daysTo(c.pay)} días`,col:daysTo(c.pay)<=5?C.red:C.accent}].map(item=>(
+                        <div key={item.lbl} style={{ background:C.surface, borderRadius:10, padding:"10px 14px" }}>
+                          <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:4 }}>{item.lbl}</div>
+                          <div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:600 }}>{item.val}</div>
+                          <div style={{ color:item.col, fontSize:11, fontFamily:F, marginTop:2 }}>{item.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                      <button onClick={()=>setEditCard(c)} style={{ flex:1, ...BtnS, fontSize:12, padding:"6px 0" }}>✏️ Editar</button>
+                      <button onClick={()=>deleteCard(c.id)} style={{ ...BtnS, fontSize:12, padding:"6px 12px", color:C.red, borderColor:C.red+"55" }}>🗑</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {totLim>0&&<SCard style={{ marginBottom:16 }}>
+              <Label>Resumen global de crédito</Label>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20, marginBottom:16 }}>
+                {[{lbl:"Total usado",val:fmt(totUsed),col:C.red},{lbl:"Límite total",val:fmt(totLim),col:C.text},{lbl:"Utilización global",val:`${((totUsed/totLim)*100).toFixed(0)}%`,col:(totUsed/totLim)>0.3?C.yellow:C.accent}].map(m=>(
+                  <div key={m.lbl}><div style={{ color:C.textDim, fontSize:12, fontFamily:F, marginBottom:6 }}>{m.lbl}</div><div style={{ color:m.col, fontSize:22, fontWeight:700, fontFamily:F }}>{m.val}</div></div>
                 ))}
               </div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <SCard>
-        <Label>Resumen global de crédito</Label>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20, marginBottom:16 }}>
-          {[{lbl:"Total usado",val:fmt(totUsed),col:C.red},{lbl:"Límite total",val:fmt(totLim),col:C.text},{lbl:"Utilización global",val:`${((totUsed/totLim)*100).toFixed(0)}%`,col:(totUsed/totLim)>0.3?C.yellow:C.accent}].map(m=>(
-            <div key={m.lbl}><div style={{ color:C.textDim, fontSize:12, fontFamily:F, marginBottom:6 }}>{m.lbl}</div><div style={{ color:m.col, fontSize:22, fontWeight:700, fontFamily:F }}>{m.val}</div></div>
-          ))}
-        </div>
-        <ProgressBar value={totUsed} max={totLim} h={8}/>
-      </SCard>
-      {selected&&<CardDetailModal card={selected} txs={txs} onClose={()=>setSelected(null)}/>}
+              <ProgressBar value={totUsed} max={totLim} h={8}/>
+            </SCard>}
+            <button onClick={()=>setAdding(true)} style={BtnP}>+ Agregar tarjeta</button>
+          </>
+      }
+      {selected&&<CardDetailModal card={selected} txs={txs} msiPlans={msiPlans} onClose={()=>setSelected(null)}/>}
+      {(adding||editCard)&&<CardModal
+        card={editCard?{id:editCard.id,nombre:editCard.name,banco:editCard.bank,last4:editCard.last4,limite:editCard.lim,saldo_usado:editCard.used,dia_corte:editCard.cut,dia_pago:editCard.pay,color_inicio:editCard.clr[0],color_fin:editCard.clr[1]}:{}}
+        onSave={saveCard}
+        onClose={()=>{setAdding(false);setEditCard(null);}}
+      />}
     </div>
   );
 }
@@ -1315,6 +1419,7 @@ export default function App() {
 function Dashboard({ logout }) {
   const [tab,setTab]=useState("estado");
   const [txs,setTxs]=useState(INIT_TX);
+  const [cards,setCards]=useState([]);
   const [sidebarOpen,setSidebar]=useState(true);
   const [groupBudgets,setGroupBudgets]=useState(GROUP_BUDGET_DEFAULTS);
   const [fixedItems,setFixedItems]=useState(FIXED_DEFAULT);
@@ -1333,7 +1438,8 @@ function Dashboard({ logout }) {
       API.getFijos(),
       API.getMSI(),
       API.getPresupuestoGrupos(),
-    ]).then(([dash,fijosData,msiData,grupos])=>{
+      API.getTarjetas(),
+    ]).then(([dash,fijosData,msiData,grupos,tarjetasData])=>{
       if(dash.ingreso) setIncome(Number(dash.ingreso));
       const txsApi=dash.ultimasTransacciones||[];
       if(txsApi.length) setTxs(txsApi.map(mapApiTx));
@@ -1341,6 +1447,7 @@ function Dashboard({ logout }) {
       if(fijosData.fijos?.length) setFixedItems(fijosData.fijos.map(mapApiFijo));
       if(msiData.msi?.length)     setMsiPlans(msiData.msi.map(mapApiMsi));
       if(grupos && Object.values(grupos).some(v=>v>0)) setGroupBudgets(grupos);
+      if(tarjetasData?.length) setCards(tarjetasData.map(mapApiCard));
     }).catch(err=>{
       console.error("ClarIA API:", err);
       setApiError(err.message);
@@ -1427,10 +1534,10 @@ function Dashboard({ logout }) {
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px" }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings}/>}
           {tab==="fixed"        &&<FixedExpenses items={fixedItems} setItems={setFixedItems} income={income}/>}
-          {tab==="cards"        &&<CreditCards   txs={txs}/>}
+          {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans}/>}
           {tab==="msi"          &&<MSIPlans      plans={msiPlans}/>}
           {tab==="budget"       &&<Budget        groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income}/>}
-          {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx}/>}
+          {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards}/>}
         </div>
       </main>
       <WABot onAdd={addTx}/>
