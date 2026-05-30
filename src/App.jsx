@@ -1076,6 +1076,9 @@ function MSIPlans({ plans, cards }) {
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
 function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards }) {
+  const [savingsGoalPct, setSavingsGoalPct] = useState(20);
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState("20");
   const INCOME    = income;
   const totalFixed = fixedItems.reduce((s,f)=>s+f.amt, 0);
   const totalMSI   = msiPlans.reduce((s,p)=>s+p.mo, 0);
@@ -1158,7 +1161,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
 
       {/* ── 1. SCORE + ALERTAS ───────────────────────────────────────────── */}
       <SCard style={{ padding:"20px 24px" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:24 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:24 }}>
           {/* Score */}
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}>
             <ScoreGauge score={score}/>
@@ -1211,17 +1214,41 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
 
         {/* Ahorro */}
         <SCard style={{ padding:"20px 22px" }}>
-          <Label>Ahorro acumulado</Label>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+            <button
+              onClick={()=>{ setGoalInput(String(savingsGoalPct)); setEditingGoal(v=>!v); }}
+              title="Editar meta de ahorro"
+              style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:7, color:C.textMuted, cursor:"pointer", fontSize:13, padding:"2px 7px", lineHeight:1, flexShrink:0 }}>
+              ✏️
+            </button>
+            <span style={{ color:C.textMuted, fontSize:11, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em" }}>Ahorro acumulado</span>
+          </div>
+          {editingGoal&&(
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:10, border:`1px solid ${C.accentGlow}` }}>
+              <span style={{ color:C.textDim, fontSize:12, fontFamily:F, whiteSpace:"nowrap" }}>Meta mínima de ahorro:</span>
+              <input
+                type="number" min="1" max="100" value={goalInput}
+                onChange={e=>setGoalInput(e.target.value)}
+                style={{ ...IS, width:70, padding:"4px 8px", fontSize:13, textAlign:"center" }}
+              />
+              <span style={{ color:C.textDim, fontSize:12, fontFamily:F }}>%</span>
+              <button
+                onClick={()=>{ const v=parseFloat(goalInput); if(!isNaN(v)&&v>0&&v<=100) setSavingsGoalPct(v); setEditingGoal(false); }}
+                style={{ ...BtnP, padding:"4px 12px", fontSize:12, flexShrink:0 }}>
+                OK
+              </button>
+            </div>
+          )}
           <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
             <span style={{ color:C.accent, fontSize:28, fontWeight:700, fontFamily:F }}>{fmt(prevSavings+thisMoSavings)}</span>
             <span style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>total</span>
           </div>
           <div style={{ marginBottom:14 }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-              <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Meta 20% ({fmt(INCOME*0.20)}/mes)</span>
-              <span style={{ color:savR>=0.20?C.accent:savR>0.10?C.yellow:C.red, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(savR*100)}%</span>
+              <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>Meta {savingsGoalPct}% ({fmt(INCOME*savingsGoalPct/100)}/mes)</span>
+              <span style={{ color:savR>=savingsGoalPct/100?C.accent:savR>savingsGoalPct/200?C.yellow:C.red, fontSize:12, fontWeight:700, fontFamily:F }}>{Math.round(savR*100)}%</span>
             </div>
-            <ProgressBar value={thisMoSavings} max={INCOME*0.20||1} color={C.accent} h={6}/>
+            <ProgressBar value={thisMoSavings} max={INCOME*savingsGoalPct/100||1} color={C.accent} h={6}/>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
             {[
@@ -1265,30 +1292,37 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
         </SCard>
       </div>
 
-      {/* ── 4. DISTRIBUCIÓN DE GASTOS — presupuesto vs gastado por prioridad */}
+      {/* ── 4. DISTRIBUCIÓN DE GASTOS — por categoría */}
       <SCard>
-        <Label>Distribución de gastos</Label>
-        <div style={{ display:"flex", gap:20, marginBottom:16 }}>
-          {[{col:C.blue,lbl:"Presupuestado",op:0.45},{col:C.accent,lbl:"Dentro del límite"},{col:C.red,lbl:"Excedido"}].map(l=>(
-            <div key={l.lbl} style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <div style={{ width:12, height:12, borderRadius:3, background:l.col, opacity:l.op||1 }}/>
-              <span style={{ color:C.textDim, fontSize:12, fontFamily:F }}>{l.lbl}</span>
-            </div>
-          ))}
-        </div>
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart
-            data={PRIORITIES.map(p=>({ cat:p, bud:groupBudgets[p]||0, real:spentByGroup[p]||0, color:PM[p].color }))}
-            barGap={4} barCategoryGap="28%" margin={{ top:0, right:10, bottom:0, left:0 }}>
-            <XAxis dataKey="cat" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
-            <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
-            <Tooltip cursor={{ fill:"transparent" }} contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, fontFamily:F, fontSize:12, color:C.text }}/>
-            <Bar dataKey="bud" name="Presupuesto" fill={C.blue} radius={[4,4,0,0]} opacity={0.45} activeBar={{ opacity:0.45 }}/>
-            <Bar dataKey="real" name="Gastado" radius={[4,4,0,0]} activeBar={false}>
-              {PRIORITIES.map((p,i)=><Cell key={i} fill={(spentByGroup[p]||0)>(groupBudgets[p]||0)?C.red:PM[p].color}/>)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <Label>Distribución de gastos por categoría</Label>
+        {(() => {
+          const catData = Object.entries(spentByCat)
+            .sort((a,b)=>b[1]-a[1])
+            .map(([cat,val])=>({ cat, val, color: EXP_COLORS[cat]||C.purple }));
+          if(!catData.length) return <div style={{ color:C.textMuted, fontSize:13, fontFamily:F, padding:"20px 0" }}>Sin gastos registrados este mes</div>;
+          return (
+            <>
+              <div style={{ display:"flex", gap:14, marginBottom:14, flexWrap:"wrap" }}>
+                {catData.map(d=>(
+                  <div key={d.cat} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:d.color }}/>
+                    <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>{d.cat}</span>
+                  </div>
+                ))}
+              </div>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={catData} barCategoryGap="32%" margin={{ top:0, right:10, bottom:0, left:0 }}>
+                  <XAxis dataKey="cat" tick={{ fill:C.textDim, fontSize:12, fontFamily:F }} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{ fill:C.textMuted, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false} tickFormatter={v=>`$${v/1000}k`}/>
+                  <Tooltip cursor={{ fill:`${C.border}44` }} contentStyle={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, fontFamily:F, fontSize:12, color:C.text }} formatter={v=>[fmt(v),"Gastado"]}/>
+                  <Bar dataKey="val" name="Gastado" radius={[4,4,0,0]}>
+                    {catData.map((d,i)=><Cell key={i} fill={d.color}/>)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </>
+          );
+        })()}
       </SCard>
 
       {/* ── 5. HISTÓRICO MENSUAL (top 5 + Otros) ────────────────────────── */}
