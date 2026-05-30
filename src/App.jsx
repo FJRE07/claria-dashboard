@@ -539,28 +539,81 @@ function CardModal({ card, onSave, onClose }) {
     color_inicio: card.color_inicio||"#002C7A", color_fin: card.color_fin||"#0058C8",
   });
   const [busy,setBusy]=useState(false);
+  const [analizando,setAnalizando]=useState(false);
+  const [parseErr,setParseErr]=useState("");
+  const [analizado,setAnalizado]=useState(false);
+  const fileRef=useRef(null);
+
+  const analizarPDF=async(e)=>{
+    const file=e.target.files?.[0]; if(!file)return;
+    setAnalizando(true); setParseErr("");
+    try{
+      const buffer=await file.arrayBuffer();
+      const bytes=new Uint8Array(buffer);
+      let bin=""; for(let i=0;i<bytes.byteLength;i++) bin+=String.fromCharCode(bytes[i]);
+      const b64=btoa(bin);
+      const info=await API.parseEstadoCuenta(b64);
+      setD(p=>({
+        ...p,
+        nombre:    info.nombre_tarjeta || p.nombre,
+        banco:     info.banco          || p.banco,
+        last4:     info.last4          || p.last4,
+        limite:    info.limite!=null   ? String(info.limite)       : p.limite,
+        saldo_usado: info.saldo_usado!=null ? String(info.saldo_usado) : p.saldo_usado,
+        dia_corte: info.dia_corte      || p.dia_corte,
+        dia_pago:  info.dia_pago       || p.dia_pago,
+      }));
+      setAnalizado(true);
+    } catch(e){ setParseErr("No se pudo leer el PDF. Verifica que sea un estado de cuenta BBVA."); }
+    finally{ setAnalizando(false); e.target.value=""; }
+  };
+
   const save=async()=>{
     if(!d.nombre||!d.last4)return;
     setBusy(true);
     try{ await onSave({...d, limite:parseFloat(d.limite)||0, saldo_usado:parseFloat(d.saldo_usado)||0, dia_corte:parseInt(d.dia_corte)||15, dia_pago:parseInt(d.dia_pago)||10}); onClose(); }
     finally{ setBusy(false); }
   };
+
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:480, background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:"24px 28px", animation:"slideUp .25s ease" }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:500, background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:"24px 28px", animation:"slideUp .25s ease" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
           <div style={{ color:C.text, fontSize:16, fontWeight:600, fontFamily:F }}>{isNew?"Nueva tarjeta":"Editar tarjeta"}</div>
           <button onClick={onClose} style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textDim, fontSize:18 }}>✕</button>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
-          <div style={{ gridColumn:"1/-1" }}><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Nombre</div><input value={d.nombre} onChange={e=>setD(p=>({...p,nombre:e.target.value}))} placeholder="ej: Azul BBVA" style={IS}/></div>
-          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Banco</div><input value={d.banco} onChange={e=>setD(p=>({...p,banco:e.target.value}))} placeholder="BBVA" style={IS}/></div>
-          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Últimos 4 dígitos</div><input value={d.last4} onChange={e=>setD(p=>({...p,last4:e.target.value}))} placeholder="4521" maxLength={4} style={IS}/></div>
-          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Límite de crédito</div><input type="number" value={d.limite} onChange={e=>setD(p=>({...p,limite:e.target.value}))} placeholder="50000" style={IS}/></div>
-          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Saldo actual usado</div><input type="number" value={d.saldo_usado} onChange={e=>setD(p=>({...p,saldo_usado:e.target.value}))} placeholder="0" style={IS}/></div>
-          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Día de corte</div><input type="number" min="1" max="31" value={d.dia_corte} onChange={e=>setD(p=>({...p,dia_corte:parseInt(e.target.value)||15}))} style={IS}/></div>
-          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Día de pago</div><input type="number" min="1" max="31" value={d.dia_pago} onChange={e=>setD(p=>({...p,dia_pago:parseInt(e.target.value)||10}))} style={IS}/></div>
+
+        {/* PDF analyzer */}
+        <input ref={fileRef} type="file" accept=".pdf" onChange={analizarPDF} style={{ display:"none" }}/>
+        <div style={{ background:analizado?C.accentDim:C.card, border:`1px solid ${analizado?C.accentGlow:C.border}`, borderRadius:12, padding:"14px 18px", marginBottom:18, display:"flex", alignItems:"center", gap:14 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ color:analizado?C.accent:C.text, fontSize:13, fontWeight:600, fontFamily:F }}>
+              {analizado?"✓ Estado de cuenta analizado":"📄 Analizar estado de cuenta BBVA"}
+            </div>
+            <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginTop:3, lineHeight:1.5 }}>
+              {analizado
+                ? "Los campos se llenaron automáticamente. Revisa y ajusta si es necesario."
+                : "Sube el PDF para extraer automáticamente límite, saldo, días de corte y pago."}
+            </div>
+            {parseErr&&<div style={{ color:C.red, fontSize:11, fontFamily:F, marginTop:4 }}>{parseErr}</div>}
+          </div>
+          <button onClick={()=>fileRef.current?.click()} disabled={analizando}
+            style={{ ...BtnP, padding:"8px 16px", fontSize:12, background:analizado?C.accent:C.blue, flexShrink:0, opacity:analizando?0.6:1 }}>
+            {analizando?"Analizando…":analizado?"Volver a analizar":"Subir PDF"}
+          </button>
         </div>
+
+        {/* Campos (revisión / entrada manual) */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+          <div style={{ gridColumn:"1/-1" }}><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Nombre de la tarjeta</div><input value={d.nombre} onChange={e=>setD(p=>({...p,nombre:e.target.value}))} placeholder="ej: BBVA Dorada" style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Banco</div><input value={d.banco} onChange={e=>setD(p=>({...p,banco:e.target.value}))} placeholder="BBVA" style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Últimos 4 dígitos</div><input value={d.last4} onChange={e=>setD(p=>({...p,last4:e.target.value}))} placeholder="9607" maxLength={4} style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Límite de crédito</div><input type="number" value={d.limite} onChange={e=>setD(p=>({...p,limite:e.target.value}))} placeholder="200000" style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Saldo al corte</div><input type="number" value={d.saldo_usado} onChange={e=>setD(p=>({...p,saldo_usado:e.target.value}))} placeholder="0" style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Día de corte</div><input type="number" min="1" max="31" value={d.dia_corte} onChange={e=>setD(p=>({...p,dia_corte:parseInt(e.target.value)||15}))} style={IS}/></div>
+          <div><div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:4 }}>Día límite de pago</div><input type="number" min="1" max="31" value={d.dia_pago} onChange={e=>setD(p=>({...p,dia_pago:parseInt(e.target.value)||10}))} style={IS}/></div>
+        </div>
+
         <div style={{ marginBottom:18 }}>
           <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginBottom:8 }}>Color de la tarjeta</div>
           <div style={{ display:"flex", gap:8 }}>
@@ -570,9 +623,12 @@ function CardModal({ card, onSave, onClose }) {
             ))}
           </div>
         </div>
+
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <button onClick={onClose} style={BtnS}>Cancelar</button>
-          <button onClick={save} disabled={busy} style={BtnP}>{busy?"Guardando…":"Guardar"}</button>
+          <button onClick={save} disabled={busy||!d.nombre||!d.last4} style={{ ...BtnP, opacity:(!d.nombre||!d.last4)?0.5:1 }}>
+            {busy?"Guardando…":"Guardar tarjeta"}
+          </button>
         </div>
       </div>
     </div>
