@@ -775,7 +775,7 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
 }
 
 // ── CREDIT CARDS ──────────────────────────────────────────────────────────────
-function CreditCards({ txs, cards, setCards, setTxs, msiPlans, onImportDone }) {
+function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onImportDone }) {
   const [selected,setSelected]=useState(null);
   const [editCard,setEditCard]=useState(null);
   const [adding,setAdding]=useState(false);
@@ -811,8 +811,12 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, onImportDone }) {
   };
 
   const deleteCard=async(id)=>{
-    if(!confirm("¿Eliminar esta tarjeta? Las transacciones no se borran."))return;
-    try{ await API.deleteTarjeta(id); setCards(prev=>prev.filter(c=>c.id!==id)); }
+    if(!confirm("¿Eliminar esta tarjeta? Se eliminarán sus planes MSI asociados."))return;
+    try{
+      await API.deleteTarjeta(id);
+      setCards(prev=>prev.filter(c=>c.id!==id));
+      if(setMsiPlans) setMsiPlans(prev=>prev.filter(p=>p.cardId!==id));
+    }
     catch(e){ console.error("Error eliminando tarjeta:",e); }
   };
 
@@ -1168,6 +1172,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     totLim,
     totUsed,
     ahorroMensual: thisMoSavings > 0 ? thisMoSavings : AHORRO_MENSUAL,
+    ahorrosTxs: txs.filter(t=>t.cat==="Ahorro").map(t=>({ id:t.id, desc:t.desc, amt:Math.abs(t.amt), date:t.date })),
   };
 
   return (
@@ -1694,38 +1699,67 @@ const META_DEPTO     = 150000;
 const AHORRO_MENSUAL = 10000;
 
 function SeccionAhorroMSI({ dash }) {
-  const acumulado      = dash?.acumulado ?? 0;
-  const libre          = Number(dash?.libre||0);
-  const ahorroMensual  = dash?.ahorroMensual || AHORRO_MENSUAL;
-  const saldoMSI       = dash?.msiActivos?.filter(m=>Number(m.pagos_restantes)>0)
-                              .reduce((s,m)=>s+Number(m.saldo_pendiente),0)||0;
-  const mesesRestantes = ahorroMensual>0&&acumulado<META_DEPTO?Math.ceil((META_DEPTO-acumulado)/ahorroMensual):0;
-  const pctMeta        = Math.round(Math.min(acumulado/META_DEPTO*100,100));
-  const posicionNeta   = acumulado-saldoMSI;
-  const COLORS_MSI     = ["#185FA5","#D85A30","#1D9E75","#7F77DD","#BA7517"];
-  const planesActivos  = (dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0);
-  const cuotasMSI      = dash?.cuotasMSI||0;
-  const totLimCard     = dash?.totLim||0;
-  const totUsedCard    = dash?.totUsed||0;
-  const utilPct        = totLimCard>0?Math.round(totUsedCard/totLimCard*100):0;
+  const [editModoAhorro, setEditModoAhorro] = useState(false);
+  const [editModoMSI,    setEditModoMSI]    = useState(false);
+  const [editingMeta,    setEditingMeta]    = useState(false);
+  const [metaInput,      setMetaInput]      = useState("");
+  const [localAhorros,   setLocalAhorros]   = useState(dash?.ahorrosTxs||[]);
+  const [metaAnual,      setMetaAnual]      = useState(()=>{
+    const mo = (dash?.ahorroMensual||AHORRO_MENSUAL);
+    return mo * (11 - new Date().getMonth());
+  });
+
+  const acumulado     = dash?.acumulado ?? 0;
+  const libre         = Number(dash?.libre||0);
+  const ahorroMensual = dash?.ahorroMensual || AHORRO_MENSUAL;
+  const saldoMSI      = dash?.msiActivos?.filter(m=>Number(m.pagos_restantes)>0)
+                             .reduce((s,m)=>s+Number(m.saldo_pendiente),0)||0;
+  const mesesAFin     = 11 - new Date().getMonth(); // Jun→Dic = 7 para May
+  const pctMeta       = metaAnual>0?Math.round(Math.min(acumulado/metaAnual*100,100)):0;
+  const posicionNeta  = acumulado-saldoMSI;
+  const COLORS_MSI    = ["#185FA5","#D85A30","#1D9E75","#7F77DD","#BA7517"];
+  const planesActivos = (dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0);
+  const cuotasMSI     = dash?.cuotasMSI||0;
+  const totLimCard    = dash?.totLim||0;
+  const totUsedCard   = dash?.totUsed||0;
+  const utilPct       = totLimCard>0?Math.round(totUsedCard/totLimCard*100):0;
 
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
 
       {/* ── AHORRO ── */}
       <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
-        <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>resumen de ahorros</div>
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em" }}>resumen de ahorros</div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={()=>setEditModoAhorro(m=>!m)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:`1px solid ${editModoAhorro?C.accent:C.border}`, background:editModoAhorro?C.accentDim:"transparent", color:editModoAhorro?C.accent:C.textDim, cursor:"pointer" }}>{editModoAhorro?"Listo":"Gestionar"}</button>
+          </div>
+        </div>
+
+        {/* Meta editable */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
           <div>
             <div style={{ fontSize:44, fontWeight:600, color:"#1D9E75", lineHeight:1, letterSpacing:-1 }}>
               ${acumulado.toLocaleString("es-MX")}
             </div>
-            <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>acumulado para departamento</div>
+            <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>acumulado</div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:C.muted }}>progreso meta</div>
-            <div style={{ fontSize:22, fontWeight:600, color:"#1D9E75" }}>{pctMeta}%</div>
-            <div style={{ fontSize:11, color:C.muted }}>de ${META_DEPTO.toLocaleString("es-MX")}</div>
+            <div style={{ fontSize:11, color:C.muted }}>progreso meta {pctMeta}%</div>
+            {editingMeta
+              ? <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                  <span style={{ fontSize:11, color:C.muted }}>$</span>
+                  <input value={metaInput} onChange={e=>setMetaInput(e.target.value.replace(/[^0-9]/g,""))}
+                    style={{ width:80, background:C.bg2, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 6px", fontSize:12, color:C.text, outline:"none", textAlign:"right" }}
+                    onKeyDown={e=>{if(e.key==="Enter"){setMetaAnual(Number(metaInput)||metaAnual);setEditingMeta(false);}}}/>
+                  <button onClick={()=>{setMetaAnual(Number(metaInput)||metaAnual);setEditingMeta(false);}} style={{ background:"#185FA5", border:"none", borderRadius:5, color:"#fff", padding:"3px 8px", fontSize:11, cursor:"pointer" }}>OK</button>
+                </div>
+              : <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                  <div style={{ fontSize:15, fontWeight:600, color:"#1D9E75" }}>${metaAnual.toLocaleString("es-MX")} meta</div>
+                  <button onClick={()=>{setMetaInput(String(metaAnual));setEditingMeta(true);}} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:5, color:C.muted, padding:"2px 6px", fontSize:10, cursor:"pointer" }}>✏️</button>
+                </div>
+            }
           </div>
         </div>
         <div style={{ height:8, background:C.bg2, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
@@ -1733,12 +1767,12 @@ function SeccionAhorroMSI({ dash }) {
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginBottom:12 }}>
           <span>${acumulado.toLocaleString("es-MX")} acumulados</span>
-          <span>faltan ${(META_DEPTO-acumulado).toLocaleString("es-MX")}</span>
+          <span>faltan ${Math.max(0,metaAnual-acumulado).toLocaleString("es-MX")}</span>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:C.border, borderRadius:8, overflow:"hidden", marginBottom:14 }}>
           {[
-            { label:"ahorro mensual",  val:`$${ahorroMensual.toLocaleString("es-MX")}`, color:"#1D9E75" },
-            { label:"meses restantes", val:mesesRestantes>0?`${mesesRestantes} meses`:"Meta cubierta", color:C.text },
+            { label:"ahorro mensual",       val:`$${ahorroMensual.toLocaleString("es-MX")}`, color:"#1D9E75" },
+            { label:`meses a fin de año`,   val:`${mesesAFin} meses`,                        color:C.text },
           ].map(k=>(
             <div key={k.label} style={{ background:C.bg2, padding:"8px 12px" }}>
               <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:2 }}>{k.label}</div>
@@ -1746,21 +1780,35 @@ function SeccionAhorroMSI({ dash }) {
             </div>
           ))}
         </div>
+
+        {/* Movimientos reales */}
         <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:8 }}>movimientos de ahorro</div>
-        {[
-          { name:"Ahorro Departamento",     tipo:"Fijo comprometido · transferencia mensual",       monto:`+$${ahorroMensual.toLocaleString("es-MX")}`,                               color:"#1D9E75" },
-          { name:"Excedente libre",          tipo:"Del ingreso tras fijos + MSI + gastos",            monto:`+$${libre.toLocaleString("es-MX",{maximumFractionDigits:0})}`,             color:"#1D9E75" },
-          { name:"Posible ahorro adicional", tipo:"Si destinas el 50% del excedente",                monto:`+$${Math.round(libre*0.5).toLocaleString("es-MX")}`,                        color:"#378ADD" },
-          { name:"Deuda MSI activa",         tipo:`Compromiso futuro en ${planesActivos.length} planes`, monto:`−$${saldoMSI.toLocaleString("es-MX")}`,                               color:"#E24B4A" },
-        ].map(m=>(
-          <div key={m.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:`0.5px solid ${C.border}` }}>
+        {localAhorros.length===0
+          ? <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"14px 0" }}>Sin movimientos registrados</div>
+          : localAhorros.map(m=>(
+              <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:`0.5px solid ${C.border}` }}>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:500, color:C.text }}>{m.desc}</div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:1 }}>{m.date}</div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:"#1D9E75", flexShrink:0 }}>+${m.amt.toLocaleString("es-MX",{maximumFractionDigits:0})}</div>
+                  {editModoAhorro&&<button onClick={()=>setLocalAhorros(p=>p.filter(x=>x.id!==m.id))} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer" }}>✕</button>}
+                </div>
+              </div>
+            ))
+        }
+        {saldoMSI>0&&(
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:`0.5px solid ${C.border}` }}>
             <div>
-              <div style={{ fontSize:12, fontWeight:500, color:C.text }}>{m.name}</div>
-              <div style={{ fontSize:11, color:C.muted, marginTop:1 }}>{m.tipo}</div>
+              <div style={{ fontSize:12, fontWeight:500, color:C.text }}>Deuda MSI activa</div>
+              <div style={{ fontSize:11, color:C.muted }}>{planesActivos.length} planes activos</div>
             </div>
-            <div style={{ fontSize:13, fontWeight:600, color:m.color, flexShrink:0 }}>{m.monto}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:"#E24B4A" }}>−${saldoMSI.toLocaleString("es-MX")}</div>
           </div>
-        ))}
+        )}
+
+        {/* Posición neta */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:10, marginTop:4, borderTop:`0.5px solid ${C.border}` }}>
           <div>
             <div style={{ fontSize:12, color:C.muted }}>Posición neta de ahorro</div>
@@ -1774,7 +1822,10 @@ function SeccionAhorroMSI({ dash }) {
 
       {/* ── CRÉDITO / MSI ── */}
       <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
-        <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>distribución de crédito</div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em" }}>distribución de crédito</div>
+          <button onClick={()=>setEditModoMSI(m=>!m)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:`1px solid ${editModoMSI?C.accent:C.border}`, background:editModoMSI?C.accentDim:"transparent", color:editModoMSI?C.accent:C.textDim, cursor:"pointer" }}>{editModoMSI?"Listo":"Gestionar"}</button>
+        </div>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
           <div>
             <div style={{ fontSize:44, fontWeight:600, color:"#D85A30", lineHeight:1, letterSpacing:-1 }}>
@@ -1814,6 +1865,7 @@ function SeccionAhorroMSI({ dash }) {
               const pagados=Number(m.pagos_hechos), total=Number(m.total_pagos), restantes=Number(m.pagos_restantes);
               return (
                 <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"8px 0", borderBottom:`0.5px solid ${C.border}` }}>
+                  {editModoMSI&&<button onClick={()=>{ /* TODO: delete MSI plan */ }} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer", flexShrink:0, marginRight:8, alignSelf:"center" }}>✕</button>}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:600, marginBottom:4, color:C.text }}>{m.descripcion}</div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginBottom:3 }}>
@@ -2169,9 +2221,11 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
           <div style={{fontSize:11,color:C.muted,marginTop:2}}>Edita montos directo · arrastra categorías entre prioridades</div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,border:`1px solid ${editMode?C.red:C.border}`,background:editMode?"#E24B4A18":"transparent",color:editMode?"#E24B4A":C.textDim,cursor:"pointer"}} onClick={()=>setEditMode(m=>!m)}>{editMode?"Listo":"Gestionar"}</button>
+          <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,border:`1px solid ${editMode?C.red:C.border}`,background:editMode?"#E24B4A18":"transparent",color:editMode?"#E24B4A":C.textDim,cursor:"pointer"}}
+            onClick={()=>{ if(editMode) handleGuardar(); setEditMode(m=>!m); }}>
+            {saving?"Guardando…":editMode?"Listo":"Gestionar"}
+          </button>
           <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}} onClick={()=>setAddMode(true)}>+ Agregar</button>
-          <button style={S.btn} onClick={handleGuardar} disabled={saving}>{saving?"Guardando…":"Guardar cambios"}</button>
         </div>
       </div>
 
@@ -2212,7 +2266,6 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
                     {cat.sub&&<div style={{fontSize:10,opacity:.6,marginTop:2}}>{cat.sub}</div>}
                   </div>
                 ))}
-                <div style={S.addBtn(color)} onClick={()=>setNuevo(prev=>({...prev,prioridad:p.key}))}>+ agregar aquí</div>
               </div>
             </div>
           );
@@ -2367,7 +2420,7 @@ function Dashboard({ logout }) {
               }}
               onDelete={async(id)=>{await API.deleteFijo(id).catch(console.error);setFixedItems(p=>p.filter(f=>f.id!==id));}}
             /></>}
-          {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} onImportDone={cargarDatos}/>}
+          {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} setMsiPlans={setMsiPlans} onImportDone={cargarDatos}/>}
           {tab==="budget"       &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
             <TabPresupuesto
               presupuestoData={[]}
