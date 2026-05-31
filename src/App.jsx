@@ -1082,7 +1082,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
   const [goalInput, setGoalInput] = useState("20");
   const INCOME    = income;
   const totalFixed = fixedItems.reduce((s,f)=>s+f.amt, 0);
-  const totalMSI   = msiPlans.reduce((s,p)=>s+p.mo, 0);
+  const totalMSI   = msiPlans.filter(p=>p.paid<p.months).reduce((s,p)=>s+p.mo, 0);
   const committed  = totalFixed + totalMSI;
   const committedR = INCOME>0 ? committed/INCOME : 0;
 
@@ -1151,7 +1151,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     pagos_hechos:p.paid, total_pagos:p.months,
     pagos_restantes:p.months-p.paid,
     cuota_mensual:p.mo,
-    saldo_pendiente:p.total-p.paid*p.mo,
+    saldo_pendiente:p.mo*(p.months-p.paid),
     proxima_cuota:new Date(new Date(p.start).setMonth(new Date(p.start).getMonth()+p.paid+1)).toISOString().slice(0,10),
   }));
   const d = {
@@ -1161,6 +1161,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     msiActivos: msiActivosApi,
     cuotasMSI:  activeMsi.reduce((s,p)=>s+p.mo,0),
     totLim,
+    totUsed,
   };
 
   return (
@@ -1668,7 +1669,7 @@ function SeccionPresupuesto({ porCategoria, presupuesto }) {
               <div style={{ height:5, background:C.bg2, borderRadius:3, overflow:"hidden", marginBottom:8 }}>
                 <div style={{ height:"100%", width:`${pctGrupo}%`, background:excede?"#E24B4A":color, borderRadius:3 }}/>
               </div>
-              {cats.map(cat=>{
+              {[...cats].sort((a,b)=>(gastoReal[b]||0)-(gastoReal[a]||0)).map(cat=>{
                 const g=gastoReal[cat]||0; const p=presupMap[cat]||0;
                 const pct=p>0?Math.min((g/p)*100,100):0; const over=g>p&&p>0;
                 return (
@@ -1707,7 +1708,8 @@ function SeccionAhorroMSI({ dash }) {
   const planesActivos  = (dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0);
   const cuotasMSI      = dash?.cuotasMSI||0;
   const totLimCard     = dash?.totLim||0;
-  const utilPct        = totLimCard>0?Math.round(saldoMSI/totLimCard*100):0;
+  const totUsedCard    = dash?.totUsed||0;
+  const utilPct        = totLimCard>0?Math.round(totUsedCard/totLimCard*100):0;
 
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
@@ -1783,28 +1785,26 @@ function SeccionAhorroMSI({ dash }) {
             <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>saldo total en MSI</div>
           </div>
           {totLimCard>0&&<div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:11, color:C.muted }}>del límite comprometido</div>
+            <div style={{ fontSize:11, color:C.muted }}>del límite utilizado</div>
             <div style={{ fontSize:22, fontWeight:600, color:"#BA7517" }}>{utilPct}%</div>
             <div style={{ fontSize:11, color:C.muted }}>${totLimCard.toLocaleString("es-MX")} límite total</div>
           </div>}
         </div>
-        {totLimCard>0&&<>
-          <div style={{ height:8, background:C.bg2, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
-            <div style={{ height:"100%", width:`${utilPct}%`, background:"linear-gradient(90deg,#1D9E75,#BA7517)", borderRadius:4 }}/>
-          </div>
-          <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginBottom:12 }}>
-            <span>${saldoMSI.toLocaleString("es-MX")} comprometido</span>
-            <span style={{ color:"#BA7517", fontWeight:500 }}>{utilPct}% utilizado</span>
-          </div>
-        </>}
+        <div style={{ height:8, background:C.bg2, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
+          <div style={{ height:"100%", width:`${totLimCard>0?utilPct:0}%`, background:"linear-gradient(90deg,#1D9E75,#BA7517)", borderRadius:4 }}/>
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginBottom:12 }}>
+          <span>${totUsedCard.toLocaleString("es-MX")} utilizados</span>
+          <span style={{ color:"#BA7517", fontWeight:500 }}>{utilPct}% del límite</span>
+        </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:C.border, borderRadius:8, overflow:"hidden", marginBottom:14 }}>
           {[
-            { label:"cuota mensual",     val:`$${cuotasMSI.toLocaleString("es-MX")}`,     color:"#D85A30" },
-            { label:"planes activos",    val:`${planesActivos.length} planes`,              color:"#378ADD" },
+            { label:"cuota mensual",  val:`$${cuotasMSI.toLocaleString("es-MX")}`, color:"#D85A30" },
+            { label:"planes activos", val:`${planesActivos.length} planes`,         color:"#378ADD" },
           ].map(k=>(
             <div key={k.label} style={{ background:C.bg2, padding:"8px 12px" }}>
               <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:2 }}>{k.label}</div>
-              <div style={{ fontSize:14, fontWeight:600, color:k.color }}>{k.val}</div>
+              <div style={{ fontSize:15, fontWeight:600, color:k.color }}>{k.val}</div>
             </div>
           ))}
         </div>
