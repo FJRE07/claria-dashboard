@@ -1293,15 +1293,6 @@ function Budget({ groupBudgets, setGroupBudgets, income, txs }) {
 
   return (
     <div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:24 }}>
-        {[{lbl:"Ingreso mensual",val:fmt(INCOME),col:C.accent},{lbl:"Total presupuestado",val:fmt(totalBudget),col:totalBudget>INCOME?C.red:C.blue},{lbl:"Sin asignar",val:fmt(remaining),col:remaining<0?C.red:C.accent},{lbl:"Grupos",val:PRIORITIES.length,col:C.textDim}].map(m=>(
-          <SCard key={m.lbl} style={{ padding:"16px 18px" }}>
-            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>{m.lbl}</div>
-            <div style={{ color:m.col, fontSize:20, fontWeight:700, fontFamily:F }}>{m.val}</div>
-          </SCard>
-        ))}
-      </div>
-
       {/* Presupuesto por prioridad — gastado vs asignado */}
       <SCard style={{ marginBottom:24 }}>
         <Label>{mes.charAt(0).toUpperCase()+mes.slice(1)} — Real vs presupuesto por prioridad</Label>
@@ -1862,12 +1853,13 @@ function KpiStrip({ income, fixedItems, msiPlans, txs=[] }) {
   const gastoVar   = txs.filter(t=>t.amt<0&&t.cat!=="Ahorro").reduce((s,t)=>s+Math.abs(t.amt),0);
   const libre      = Math.max(0, income-totalFixed-totalMSI-gastoVar);
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:16 }}>
       {[
-        { lbl:"Ingreso mensual", val:fmt(income),     col:C.accent,  sub:null },
-        { lbl:"Gastos fijos",    val:fmt(totalFixed), col:C.red,     sub:income>0?`${Math.round(totalFixed/income*100)}% del ingreso`:null },
-        { lbl:"MSI / mes",       val:fmt(totalMSI),   col:C.yellow,  sub:income>0?`${Math.round(totalMSI/income*100)}% del ingreso`:null },
-        { lbl:"Saldo libre",     val:fmt(libre),      col:libre<=0?C.red:C.accent, sub:null },
+        { lbl:"Ingreso mensual",  val:fmt(income),     col:C.accent,  sub:null },
+        { lbl:"Gastos fijos",     val:fmt(totalFixed), col:C.red,     sub:income>0?`${Math.round(totalFixed/income*100)}% del ingreso`:null },
+        { lbl:"MSI / mes",        val:fmt(totalMSI),   col:C.yellow,  sub:income>0?`${Math.round(totalMSI/income*100)}% del ingreso`:null },
+        { lbl:"Gastado variable", val:fmt(gastoVar),   col:C.blue,    sub:income>0?`${Math.round(gastoVar/income*100)}% del ingreso`:null },
+        { lbl:"Saldo libre",      val:fmt(libre),      col:libre<=0?C.red:C.accent, sub:null },
       ].map(k=>(
         <div key={k.lbl} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6 }}>
           <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>{k.lbl}</span>
@@ -1951,8 +1943,8 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
   return (
     <div>
       {/* Formulario agregar */}
-      <div style={{...S.card,marginBottom:10,background:C.bg2,border:`0.5px dashed ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:500,marginBottom:10}}>+ Agregar gasto fijo</div>
+      <div style={{...S.card,marginBottom:16}}>
+        <div style={{fontSize:12,fontWeight:600,color:C.text,marginBottom:10}}>+ Agregar gasto fijo</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 180px 140px auto",gap:8,alignItems:"flex-end"}}>
           <div>
             <div style={S.label}>Detalle</div>
@@ -1978,7 +1970,14 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
 
       {/* Lista agrupada */}
       <div style={S.card}>
-        <div style={{fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:".05em",marginBottom:14}}>gastos fijos declarados</div>
+        {/* Resumen al tope */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:".05em"}}>gastos fijos declarados</div>
+          {items.length>0&&<div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:11,color:C.muted}}>{items.length} conceptos</span>
+            <span style={{fontSize:16,fontWeight:700,color:"#D4537E"}}>{$f(total)}</span>
+          </div>}
+        </div>
         {Object.entries(grupos).map(([cat,catItems],gi)=>{
           const color=CAT_COLORS_FIJOS[cat]||"#888";
           const catTotal=catItems.reduce((s,i)=>s+Number(i.monto),0);
@@ -2034,15 +2033,6 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
             </div>
           );
         })}
-        {items.length>0&&(
-          <>
-            <div style={{height:"0.5px",background:C.border,margin:"12px 0"}}/>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:13,color:C.muted}}>Total comprometido · {items.length} conceptos</span>
-              <span style={{fontSize:18,fontWeight:600,color:"#D4537E"}}>{$f(total)}</span>
-            </div>
-          </>
-        )}
         {items.length===0&&(
           <div style={{textAlign:"center",padding:"24px 0",color:C.muted,fontSize:13}}>
             No hay gastos fijos declarados. Agrega el primero arriba.
@@ -2185,7 +2175,7 @@ function Dashboard({ logout }) {
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red;e.currentTarget.style.color=C.red;}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textDim;}}>⏻</button>
         </header>
-        <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px" }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px", display:"flex", flexDirection:"column", gap:0 }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}/>}
           {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
             <TabFijos
