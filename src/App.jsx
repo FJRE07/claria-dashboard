@@ -13,7 +13,7 @@ const C = {
   muted:"#6B8CA8", bg2:"#0B1019",
 };
 const F = "'IBM Plex Sans', system-ui, sans-serif";
-const fmt = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0}).format(Math.abs(n));
+const fmt = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0,maximumFractionDigits:0}).format(Math.abs(n));
 const daysTo = day => { const now=new Date(),t=new Date(now.getFullYear(),now.getMonth(),day); if(t<=now)t.setMonth(t.getMonth()+1); return Math.ceil((t-now)/86400000); };
 const todayStr = () => new Date().toISOString().slice(0,10);
 
@@ -676,6 +676,7 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
   const [editTx,setEditTx]=useState(null); const [addingTx,setAddingTx]=useState(false);
   const [localTxs,setLocalTxs]=useState([]);
   const [cargando,setCargando]=useState(true);
+  const [editMode,setEditMode]=useState(false);
 
   useEffect(()=>{
     setCargando(true);
@@ -730,7 +731,11 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
         <input type="date" value={from} onChange={e=>setFrom(e.target.value)} style={sel}/>
         <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>—</span>
         <input type="date" value={to} onChange={e=>setTo(e.target.value)} style={sel}/>
-        <button onClick={()=>setAddingTx(true)} style={{ ...BtnP, marginLeft:"auto", padding:"6px 16px", fontSize:12 }}>+ Añadir</button>
+        <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+          {editMode&&<button onClick={()=>{ if(confirm(`¿Eliminar las ${list.length} transacciones visibles?`)){list.forEach(t=>{setLocalTxs(p=>p.filter(x=>x.id!==t.id));setTxs(p=>p.filter(x=>x.id!==t.id));API.deleteGasto(t.id).catch(console.error);});} }} style={{ ...BtnP, background:C.red, padding:"6px 14px", fontSize:12 }}>Eliminar todas</button>}
+          <button onClick={()=>setEditMode(m=>!m)} style={{ padding:"6px 14px", borderRadius:8, fontSize:12, fontFamily:F, border:`1px solid ${editMode?C.accent:C.border}`, background:editMode?C.accentDim:"transparent", color:editMode?C.accent:C.textDim, cursor:"pointer" }}>{editMode?"Listo":"Gestionar"}</button>
+          <button onClick={()=>setAddingTx(true)} style={{ ...BtnP, padding:"6px 16px", fontSize:12 }}>+ Añadir</button>
+        </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"44px 34px 1fr 78px 110px 96px 140px 72px 76px", padding:"5px 14px", marginBottom:5, fontFamily:F, fontSize:10, color:C.textMuted, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em" }}>
         <div>#ID</div><div/><div>Descripción</div><div>Fecha</div><div>Categoría</div><div style={{ textAlign:"right" }}>Monto</div><div style={{ textAlign:"center" }}>Tarjeta</div><div style={{ textAlign:"center" }}>Origen</div><div/>
@@ -756,8 +761,8 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
                     </div>
                     <div style={{ textAlign:"center" }}><span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":C.blueDim, color:tx.src==="whatsapp"?C.wa:C.blue }}>{tx.src==="whatsapp"?"WA":"Man"}</span></div>
                     <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
-                      <button onClick={()=>setEditTx(tx)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>✏️</button>
-                      <button onClick={()=>delTx(tx.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>🗑</button>
+                      {editMode&&<><button onClick={()=>setEditTx(tx)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>✏️</button>
+                      <button onClick={()=>delTx(tx.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.red+"88", cursor:"pointer", padding:"3px 7px", fontSize:11 }}>🗑</button></>}
                     </div>
                   </div>
                 );
@@ -1886,6 +1891,7 @@ const CAT_COLORS_FIJOS = {
 function TabFijos({ fijosData=[], onSave, onDelete }) {
   const [items,    setItems]    = useState(fijosData);
   const [editId,   setEditId]   = useState(null);
+  const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({});
   const [nuevo,    setNuevo]    = useState({ detalle:"", categoria:"", monto:"" });
   const [saving,   setSaving]   = useState(false);
@@ -1973,6 +1979,7 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
         {/* Resumen al tope */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <div style={{fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:".05em"}}>gastos fijos declarados</div>
+            <button onClick={()=>setEditMode(m=>!m)} style={{padding:"4px 12px",borderRadius:7,fontSize:11,fontFamily:F,border:`1px solid ${editMode?C.accent:C.border}`,background:editMode?C.accentDim:"transparent",color:editMode?C.accent:C.textDim,cursor:"pointer"}}>{editMode?"Listo":"Gestionar"}</button>
           {items.length>0&&<div style={{display:"flex",alignItems:"center",gap:12}}>
             <span style={{fontSize:11,color:C.muted}}>{items.length} conceptos</span>
             <span style={{fontSize:16,fontWeight:700,color:"#D4537E"}}>{$f(total)}</span>
@@ -2023,8 +2030,8 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
                       <div style={{fontSize:11,color:C.muted,textAlign:"center"}}>{Math.round(Number(item.monto)/total*100)}% del total</div>
                       <div style={{fontSize:14,fontWeight:600,color,textAlign:"right"}}>{$f(item.monto)}</div>
                       <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                        <button style={S.btnIcon} onClick={()=>handleEdit(item)}>✏️</button>
-                        <button style={{...S.btnIcon,...S.btnDel}} onClick={()=>handleDelete(item.id)}>✕</button>
+                        {editMode&&<><button style={S.btnIcon} onClick={()=>handleEdit(item)}>✏️</button>
+                        <button style={{...S.btnIcon,...S.btnDel}} onClick={()=>handleDelete(item.id)}>✕</button></>}
                       </div>
                     </>
                   )}
@@ -2043,11 +2050,159 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
   );
 }
 
+// ── TAB PRESUPUESTO ───────────────────────────────────────────────────────────
+const PRIORIDADES = [
+  { key:"Esencial",     color:"#E24B4A", pct:"50% · regla 50/30/20"      },
+  { key:"Importante",   color:"#BA7517", pct:"30% · quiero-necesito"     },
+  { key:"Flexible",     color:"#378ADD", pct:"10% · discrecional"        },
+  { key:"Prescindible", color:"#888780", pct:"5%  · reducible primero"   },
+];
+const CATS_DEFAULT = [
+  { id:1,  nombre:"Vivienda",         sub:"Ahorro depto comprometido",   prioridad:"Esencial",     monto:10000 },
+  { id:2,  nombre:"Deuda MSI",        sub:"Pagos comprometidos tarjeta", prioridad:"Esencial",     monto:10065 },
+  { id:3,  nombre:"Salud",            sub:"Médico y farmacia",           prioridad:"Esencial",     monto:600   },
+  { id:4,  nombre:"Super",            sub:"Despensa básica",             prioridad:"Esencial",     monto:400   },
+  { id:5,  nombre:"Restaurantes",     sub:"Salidas y comida",            prioridad:"Importante",   monto:2000  },
+  { id:6,  nombre:"Transporte",       sub:"Uber y gasolina",             prioridad:"Importante",   monto:300   },
+  { id:7,  nombre:"Telecom",          sub:"Celular e internet",          prioridad:"Importante",   monto:250   },
+  { id:8,  nombre:"Seguros",          sub:"Pólizas activas",             prioridad:"Importante",   monto:250   },
+  { id:9,  nombre:"Gym",              sub:"Total Pass + parking",        prioridad:"Importante",   monto:2500  },
+  { id:10, nombre:"Compras",          sub:"Artículos varios",            prioridad:"Flexible",     monto:400   },
+  { id:11, nombre:"Ropa",             sub:"Moda y deportes",             prioridad:"Flexible",     monto:400   },
+  { id:12, nombre:"Entretenimiento",  sub:"Ocio y cultura",              prioridad:"Flexible",     monto:300   },
+  { id:13, nombre:"Trabajo/Consulta", sub:"Tools y suscripciones",       prioridad:"Flexible",     monto:700   },
+  { id:14, nombre:"Viajes",           sub:"Escapadas y vuelos",          prioridad:"Prescindible", monto:300   },
+  { id:15, nombre:"Belleza",          sub:"Estética y cuidado",          prioridad:"Prescindible", monto:300   },
+];
+
+function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
+  const [cats,     setCats]     = useState(presupuestoData.length>0 ? presupuestoData.map((p,i)=>({id:i+1,nombre:p.categoria,sub:"",prioridad:"Flexible",monto:Number(p.monto)})) : CATS_DEFAULT);
+  const [editId,   setEditId]   = useState(null);
+  const [editMonto,setMonto]    = useState("");
+  const [drag,     setDrag]     = useState(null);
+  const [nuevo,    setNuevo]    = useState({nombre:"",sub:"",prioridad:"Flexible",monto:""});
+  const [saving,   setSaving]   = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
+  const $f = n=>"$"+Number(n).toLocaleString("es-MX",{maximumFractionDigits:0});
+  const totalAsignado = cats.reduce((s,c)=>s+c.monto,0);
+  const sinAsignar    = Math.max(0, ingreso-totalAsignado);
+  const pctPor  = p=>ingreso>0?Math.round(cats.filter(c=>c.prioridad===p).reduce((s,c)=>s+c.monto,0)/ingreso*100):0;
+  const totalPor= p=>cats.filter(c=>c.prioridad===p).reduce((s,c)=>s+c.monto,0);
+
+  const handleDrop   = p=>{ if(!drag)return; setCats(prev=>prev.map(c=>c.id===drag?{...c,prioridad:p}:c)); setDrag(null); };
+  const handleMonto  = (id,val)=>{ const num=Number(val.replace(/[^0-9.]/g,""))||0; setCats(prev=>prev.map(c=>c.id===id?{...c,monto:num}:c)); };
+  const handleAgregar= ()=>{ if(!nuevo.nombre||!nuevo.monto)return; setCats(prev=>[...prev,{id:Date.now(),...nuevo,monto:Number(String(nuevo.monto).replace(/[^0-9.]/g,""))}]); setNuevo({nombre:"",sub:"",prioridad:"Flexible",monto:""}); };
+  const handleDelete = id=>setCats(prev=>prev.filter(c=>c.id!==id));
+  const handleGuardar= async()=>{ setSaving(true); try{if(onSave)await onSave(cats);}finally{setSaving(false);} };
+
+  const segs    = PRIORIDADES.map(p=>({...p, pctBarra:ingreso>0?Math.round(totalPor(p.key)/ingreso*100):0}));
+  const pctLibre= ingreso>0?Math.round(sinAsignar/ingreso*100):0;
+
+  const S={
+    btn:     {padding:"6px 16px",background:saving?"#0e3a6e":"#185FA5",border:"none",borderRadius:8,color:"#fff",fontSize:12,fontWeight:500,cursor:"pointer"},
+    bar:     {height:14,borderRadius:7,overflow:"hidden",display:"flex",marginBottom:6,gap:2},
+    barSeg:  (color,pct)=>({height:"100%",width:`${pct}%`,background:color,borderRadius:4,transition:"width .3s"}),
+    sumCard: {background:C.bg2,borderRadius:10,padding:"10px 14px",border:`0.5px solid ${C.border}`},
+    laneWrap:{borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column"},
+    laneHead:(color)=>({padding:"12px 14px 10px",background:color+"18",borderRadius:"12px 12px 0 0"}),
+    laneBody:(color)=>({flex:1,padding:"6px 8px 8px",background:color+"08",display:"flex",flexDirection:"column",gap:5,minHeight:100}),
+    catCard: (color,first)=>({borderRadius:8,padding:"8px 10px",border:`0.5px solid ${color}${first?"44":"22"}`,background:color+(first?"18":"0e"),position:"relative",cursor:"grab"}),
+    input:   (color)=>({width:"100%",background:"transparent",border:"none",fontSize:15,fontWeight:600,outline:"none",padding:0,color,cursor:"text"}),
+    addBtn:  (color)=>({marginTop:4,padding:"6px 8px",borderRadius:6,border:`0.5px dashed ${color}44`,fontSize:11,color:color+"88",textAlign:"center",cursor:"pointer"}),
+    delBtn:  {position:"absolute",top:5,right:6,fontSize:10,color:C.muted,cursor:"pointer",background:"none",border:"none",opacity:0.7},
+    newInput:{width:"100%",background:C.card,border:`0.5px solid ${C.border}`,borderRadius:7,padding:"7px 10px",fontSize:12,color:C.text,outline:"none"},
+  };
+
+  return (
+    <div style={{color:C.text}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Diseña tu presupuesto mensual</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:2}}>Edita montos directo · arrastra categorías entre prioridades</div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,border:`1px solid ${editMode?C.red:C.border}`,background:editMode?"#E24B4A18":"transparent",color:editMode?"#E24B4A":C.textDim,cursor:"pointer"}} onClick={()=>setEditMode(m=>!m)}>{editMode?"Listo":"Gestionar"}</button>
+          <button style={S.btn} onClick={handleGuardar} disabled={saving}>{saving?"Guardando…":"Guardar cambios"}</button>
+        </div>
+      </div>
+
+      {/* Formulario agregar */}
+      <div style={{background:C.card,border:`0.5px solid ${C.border}`,borderRadius:10,padding:"10px 14px",marginBottom:14}}>
+        <div style={{fontSize:12,fontWeight:600,color:C.text,marginBottom:8}}>+ Nueva categoría</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 140px 120px 100px auto",gap:8,alignItems:"flex-end"}}>
+          {[["Nombre","nombre","ej. Streaming…"],["Descripción","sub","opcional"]].map(([l,k,ph])=>(
+            <div key={k}><div style={{fontSize:11,color:C.muted,marginBottom:4}}>{l}</div>
+              <input style={S.newInput} placeholder={ph} value={nuevo[k]} onChange={e=>setNuevo(p=>({...p,[k]:e.target.value}))}/></div>
+          ))}
+          <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Prioridad</div>
+            <select style={{...S.newInput,cursor:"pointer"}} value={nuevo.prioridad} onChange={e=>setNuevo(p=>({...p,prioridad:e.target.value}))}>
+              {PRIORIDADES.map(p=><option key={p.key} value={p.key}>{p.key}</option>)}
+            </select></div>
+          <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Monto</div>
+            <input style={{...S.newInput,textAlign:"right"}} placeholder="$0" value={nuevo.monto}
+              onChange={e=>setNuevo(p=>({...p,monto:e.target.value.replace(/[^0-9.]/g,"")}))}
+              onKeyDown={e=>e.key==="Enter"&&handleAgregar()}/></div>
+          <button style={{...S.btn,padding:"7px 14px"}} onClick={handleAgregar}>Agregar</button>
+        </div>
+      </div>
+
+      {/* Barra distribución */}
+      <div style={S.bar}>
+        {segs.map(s=><div key={s.key} style={S.barSeg(s.color,s.pctBarra)}/>)}
+        <div style={S.barSeg(C.bg2||"#1e1e2e",pctLibre)}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:10}}>
+        {segs.map(s=><span key={s.key} style={{color:s.color}}>{s.key} {s.pctBarra}%</span>)}
+        <span>Sin asignar {pctLibre}%</span>
+      </div>
+
+      {/* Resúmenes */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
+        <div style={S.sumCard}><div style={{fontSize:11,color:C.muted,marginBottom:3}}>presupuesto asignado</div><div style={{fontSize:16,fontWeight:600,color:"#1D9E75"}}>{$f(totalAsignado)}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{Math.round(totalAsignado/ingreso*100)}% del ingreso</div></div>
+        <div style={S.sumCard}><div style={{fontSize:11,color:C.muted,marginBottom:3}}>sin asignar (colchón)</div><div style={{fontSize:16,fontWeight:600,color:"#378ADD"}}>{$f(sinAsignar)}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{pctLibre}% disponible</div></div>
+        <div style={S.sumCard}><div style={{fontSize:11,color:C.muted,marginBottom:3}}>regla 50/30/20</div><div style={{fontSize:16,fontWeight:600,color:"#BA7517"}}>{pctPor("Esencial")}/{pctPor("Importante")}/{pctPor("Flexible")}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{pctPor("Esencial")>50?"Esencial > 50%":"Distribución OK ✅"}</div></div>
+      </div>
+
+      {/* Kanban */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+        {PRIORIDADES.map(p=>{
+          const color=p.color, catsPrio=cats.filter(c=>c.prioridad===p.key), total=catsPrio.reduce((s,c)=>s+c.monto,0);
+          return (
+            <div key={p.key} style={S.laneWrap(color)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(p.key)}>
+              <div style={S.laneHead(color)}>
+                <div style={{fontSize:12,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",color}}>{p.key}</div>
+                <div style={{fontSize:24,fontWeight:600,lineHeight:1,color,marginTop:2}}>{$f(total)}</div>
+                <div style={{fontSize:11,color,opacity:.7,marginTop:2}}>{pctPor(p.key)}% del ingreso</div>
+              </div>
+              <div style={S.laneBody(color)}>
+                {catsPrio.map((cat,ci)=>(
+                  <div key={cat.id} draggable onDragStart={()=>setDrag(cat.id)} style={S.catCard(color,ci===0)}>
+                    {editMode&&<button style={S.delBtn} onClick={()=>handleDelete(cat.id)}>✕</button>}
+                    <div style={{fontSize:12,fontWeight:500,marginBottom:2,paddingRight:editMode?16:0}}>{cat.nombre}</div>
+                    <input style={S.input(color)} value={editId===cat.id?editMonto:$f(cat.monto)}
+                      onFocus={()=>{setEditId(cat.id);setMonto(String(cat.monto));}}
+                      onBlur={()=>{handleMonto(cat.id,editMonto);setEditId(null);}}
+                      onChange={e=>setMonto(e.target.value)}/>
+                    {cat.sub&&<div style={{fontSize:10,opacity:.6,marginTop:2}}>{cat.sub}</div>}
+                  </div>
+                ))}
+                <div style={S.addBtn(color)} onClick={()=>setNuevo(prev=>({...prev,prioridad:p.key}))}>+ agregar aquí</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const TABS=[
   { id:"estado",       label:"Estado",        icon:"📊" },
   { id:"fixed",        label:"Gastos Fijos",  icon:"📌" },
-  { id:"cards",        label:"Tarjetas",      icon:"💳" },
   { id:"budget",       label:"Presupuestos",  icon:"🎯" },
+  { id:"cards",        label:"Tarjetas",      icon:"💳" },
   { id:"transactions", label:"Transacciones", icon:"↕️"  },
 ];
 
@@ -2190,7 +2345,15 @@ function Dashboard({ logout }) {
             /></>}
           {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} onImportDone={cargarDatos}/>}
           {tab==="budget"       &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
-            <Budget groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income} txs={txs}/></>}
+            <TabPresupuesto
+              presupuestoData={[]}
+              ingreso={income}
+              onSave={async(cats)=>{
+                const grupos={};
+                cats.forEach(cat=>{grupos[cat.prioridad]=(grupos[cat.prioridad]||0)+cat.monto;});
+                saveGroupBudgets(grupos);
+              }}
+            /></>}
           {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards}/>}
         </div>
       </main>
