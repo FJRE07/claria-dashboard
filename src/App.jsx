@@ -10,6 +10,7 @@ const C = {
   yellow:"#FFBA2C", yellowDim:"rgba(255,186,44,0.10)",
   purple:"#9B7BFF", teal:"#22D3EE",
   text:"#E2EDF7", textDim:"#9AB5CC", textMuted:"#6B8CA8", wa:"#25D366",
+  muted:"#6B8CA8", bg2:"#0B1019",
 };
 const F = "'IBM Plex Sans', system-ui, sans-serif";
 const fmt = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:0}).format(Math.abs(n));
@@ -1141,52 +1142,55 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
   const histLast3Avg = EXPENSE_TREND_RAW.slice(-4,-1).reduce((s,r)=>s+EXP_CATS.reduce((ss,c)=>ss+(r[c]||0),0),0)/3;
   const tendenciaDiff = histLast3Avg>0?(gastoVar-histLast3Avg)/histLast3Avg:0;
 
+  const porCategoria = Object.entries(spentByCat).map(([categoria,total])=>({categoria,total}));
+  const presupuesto  = Object.entries(GRUPOS).flatMap(([grp,{cats}])=>
+    cats.map(cat=>({ categoria:cat, monto:(groupBudgets[grp]||0)/cats.length }))
+  );
+  const msiActivosApi = activeMsi.map(p=>({
+    id:p.id, descripcion:p.name,
+    pagos_hechos:p.paid, total_pagos:p.months,
+    pagos_restantes:p.months-p.paid,
+    cuota_mensual:p.mo,
+    saldo_pendiente:p.total-p.paid*p.mo,
+    proxima_cuota:new Date(new Date(p.start).setMonth(new Date(p.start).getMonth()+p.paid+1)).toISOString().slice(0,10),
+  }));
+  const d = {
+    porCategoria, presupuesto,
+    libre:      libreTotal,
+    acumulado:  prevSavings + thisMoSavings,
+    msiActivos: msiActivosApi,
+    cuotasMSI:  activeMsi.reduce((s,p)=>s+p.mo,0),
+    totLim,
+  };
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
 
       {/* ── 1. KPI BAR ───────────────────────────────────────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
         {[
-          { lbl:"Ingreso mensual",  val:fmt(INCOME),                                      col:C.accent },
-          { lbl:"Gastos fijos",     val:fmt(totalFixed),                                  col:C.red    },
-          { lbl:"MSI / mes",        val:fmt(totalMSI),                                    col:C.yellow },
-          { lbl:"Gastado variable", val:fmt(gastoVar),                                    col:C.blue   },
-          { lbl:"Saldo libre",       val:fmt(libreTotal),                                  col:libreTotal<=0?C.red:C.accent },
+          { lbl:"Ingreso mensual",  val:fmt(INCOME),     col:C.accent,  sub:null },
+          { lbl:"Gastos fijos",     val:fmt(totalFixed), col:C.red,     sub:INCOME>0?`${Math.round(totalFixed/INCOME*100)}% del ingreso`:null },
+          { lbl:"MSI / mes",        val:fmt(totalMSI),   col:C.yellow,  sub:INCOME>0?`${Math.round(totalMSI/INCOME*100)}% del ingreso`:null },
+          { lbl:"Gastado variable", val:fmt(gastoVar),   col:C.blue,    sub:INCOME>0?`${Math.round(gastoVar/INCOME*100)}% del ingreso`:null },
+          { lbl:"Saldo libre",      val:fmt(libreTotal), col:libreTotal<=0?C.red:C.accent, sub:null },
         ].map(k=>(
-          <div key={k.lbl} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"18px 20px", display:"flex", flexDirection:"column", gap:6 }}>
+          <div key={k.lbl} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6 }}>
             <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>{k.lbl}</span>
-            <span style={{ color:k.col, fontSize:24, fontWeight:700, fontFamily:F, lineHeight:1.1 }}>{k.val}</span>
+            <span style={{ color:k.col, fontSize:26, fontWeight:700, fontFamily:F, lineHeight:1.1 }}>{k.val}</span>
+            {k.sub&&<span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{k.sub}</span>}
           </div>
         ))}
       </div>
 
       {/* ── 2. SCORE FINANCIERO ──────────────────────────────────────────── */}
       <SCard style={{ padding:"20px 24px" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr auto", alignItems:"stretch" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", alignItems:"stretch" }}>
 
           {/* Gauge izquierda */}
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", paddingRight:24, borderRight:`1px solid ${C.border}`, minWidth:140 }}>
             <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Score financiero</div>
             <ScoreGauge score={score}/>
-          </div>
-
-          {/* Alertas centro */}
-          <div style={{ padding:"4px 24px", borderRight:`1px solid ${C.border}` }}>
-            <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Alertas financieras</div>
-            {alertsEstado.length===0
-              ? <div style={{ color:C.accent, fontSize:13, fontFamily:F }}>Todo bajo control</div>
-              : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                  {alertsEstado.map((a,i)=>{
-                    const col=a.type==="danger"?C.red:a.type==="warn"?C.yellow:C.blue;
-                    return (
-                      <div key={i} style={{ borderLeft:`3px solid ${col}`, background:`${col}10`, borderRadius:"0 8px 8px 0", padding:"7px 12px" }}>
-                        <div style={{ color:C.text, fontSize:12, fontFamily:F, fontWeight:600 }}>{a.msg}</div>
-                        <div style={{ color:C.textDim, fontSize:11, fontFamily:F, marginTop:2 }}>{a.sub}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-            }
           </div>
 
           {/* 5 indicadores financieros */}
@@ -1263,238 +1267,8 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
         </div>
       </SCard>
 
-      {/* ── 3. DOS COLUMNAS: PRESUPUESTO vs REAL · CUOTAS MSI ────────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-
-        {/* Presupuesto vs Gasto Real */}
-        <SCard style={{ padding:12 }}>
-          <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:12 }}>Presupuesto vs Gasto Real</div>
-          {PRIORITIES.map(p=>{
-            const budget=groupBudgets[p]||0, real=spentByGroup[p]||0;
-            const pct=budget>0?Math.min((real/budget)*100,100):0;
-            const exceeds=budget>0&&real>budget;
-            const meta=PM[p];
-            // categorías que pertenecen a este grupo
-            const groupCats=Object.entries(CAT_GROUP).filter(([,g])=>g===p).map(([cat])=>cat);
-            return (
-              <div key={p} style={{ marginBottom:14 }}>
-                {/* Fila grupo */}
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                    <div style={{ width:8, height:8, borderRadius:"50%", background:meta.color }}/>
-                    <span style={{ color:meta.color, fontSize:12, fontFamily:F, fontWeight:700 }}>{p}</span>
-                  </div>
-                  <div style={{ display:"flex", gap:5, alignItems:"baseline" }}>
-                    <span style={{ color:exceeds?C.red:meta.color, fontSize:12, fontFamily:F, fontWeight:700 }}>{fmt(real)}</span>
-                    <span style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>/ {fmt(budget)}</span>
-                  </div>
-                </div>
-                <div style={{ height:8, background:C.border, borderRadius:99, overflow:"hidden", marginBottom:exceeds?2:6 }}>
-                  <div style={{ width:`${pct}%`, height:"100%", background:exceeds?C.red:meta.color, borderRadius:99, transition:"width 0.5s ease" }}/>
-                </div>
-                {exceeds&&<div style={{ color:C.red, fontSize:10, fontFamily:F, marginBottom:6 }}>Excedido {fmt(real-budget)}</div>}
-                {/* Subcategorías */}
-                <div style={{ paddingLeft:14, display:"flex", flexDirection:"column", gap:4 }}>
-                  {groupCats.map(cat=>{
-                    const catReal=spentByCat[cat]||0;
-                    if(!catReal) return null;
-                    const catPct=real>0?Math.min((catReal/real)*100,100):0;
-                    return (
-                      <div key={cat}>
-                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
-                          <span style={{ color:C.textDim, fontSize:10, fontFamily:F }}>{CAT_ICONS[cat]||"·"} {cat}</span>
-                          <span style={{ color:C.textDim, fontSize:10, fontFamily:F, fontWeight:600 }}>{fmt(catReal)}</span>
-                        </div>
-                        <div style={{ height:3, background:C.border, borderRadius:99, overflow:"hidden" }}>
-                          <div style={{ width:`${catPct}%`, height:"100%", background:`${meta.color}70`, borderRadius:99 }}/>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </SCard>
-
-        {/* Distribución de crédito */}
-        <SCard style={{ padding:12 }}>
-          <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Distribución de crédito</div>
-
-          {/* 3 KPIs */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
-            {[
-              { lbl:"Total usado",      val:fmt(totUsed),    sub:totLim>0?`${Math.round(totUsed/totLim*100)}% del límite`:"Sin límite",   col:creditUtil>0.5?C.red:C.yellow },
-              { lbl:"En MSI",           val:fmt(msiSaldoTotal), sub:totLim>0?`${Math.round(msiSaldoTotal/totLim*100)}% del límite`:`${activeMsi.length} planes`, col:C.yellow },
-              { lbl:"Compras directas", val:fmt(nonMsiUsed), sub:totLim>0?`${Math.round(nonMsiUsed/totLim*100)}% del límite`:"—",          col:C.blue },
-            ].map(k=>(
-              <div key={k.lbl} style={{ background:C.surface, borderRadius:10, padding:"8px 10px" }}>
-                <div style={{ color:C.textMuted, fontSize:9, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>{k.lbl}</div>
-                <div style={{ color:k.col, fontSize:15, fontWeight:700, fontFamily:F }}>{k.val}</div>
-                <div style={{ color:C.textMuted, fontSize:9, fontFamily:F, marginTop:1 }}>{k.sub}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Barra de crédito apilada */}
-          {totLim>0&&(()=>{
-            const msiPct=Math.min(msiSaldoTotal/totLim*100,100);
-            const dirPct=Math.min(nonMsiUsed/totLim*100,100-msiPct);
-            const libPct=Math.max(0,100-msiPct-dirPct);
-            return (
-              <div style={{ marginBottom:12 }}>
-                <div style={{ display:"flex", height:10, borderRadius:99, overflow:"hidden", gap:1 }}>
-                  <div style={{ width:`${msiPct}%`, background:C.yellow, transition:"width 0.5s" }}/>
-                  <div style={{ width:`${dirPct}%`, background:C.blue,   transition:"width 0.5s" }}/>
-                  <div style={{ width:`${libPct}%`, background:C.border }}/>
-                </div>
-                <div style={{ display:"flex", gap:14, marginTop:5 }}>
-                  {[{col:C.yellow,lbl:"MSI"},{col:C.blue,lbl:"Compras directas"},{col:C.border,lbl:"Disponible"}].map(l=>(
-                    <div key={l.lbl} style={{ display:"flex", alignItems:"center", gap:4 }}>
-                      <div style={{ width:7, height:7, borderRadius:"50%", background:l.col }}/>
-                      <span style={{ color:C.textMuted, fontSize:9, fontFamily:F }}>{l.lbl}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Planes MSI */}
-          {activeMsi.length===0
-            ? <div style={{ color:C.textMuted, fontSize:12, fontFamily:F }}>Sin planes MSI activos</div>
-            : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {activeMsi.map(plan=>{
-                  const pct=(plan.paid/plan.months)*100;
-                  const end=new Date(plan.start); end.setMonth(end.getMonth()+plan.months);
-                  const saldo=plan.total-plan.paid*plan.mo;
-                  const restantes=plan.months-plan.paid;
-                  return (
-                    <div key={plan.id} style={{ padding:"10px 12px", background:C.surface, borderRadius:10, border:`1px solid ${C.border}` }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
-                        <div>
-                          <div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:600, marginBottom:2 }}>{plan.name}</div>
-                          <div style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>Vence {end.toLocaleDateString("es-MX",{month:"long",year:"numeric"})}</div>
-                        </div>
-                        <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
-                          <div style={{ color:C.yellow, fontSize:16, fontWeight:700, fontFamily:F }}>{fmt(plan.mo)}<span style={{ fontSize:10, fontWeight:400 }}>/mes</span></div>
-                          <div style={{ color:C.red, fontSize:11, fontFamily:F, fontWeight:600 }}>{fmt(saldo)} pendiente</div>
-                        </div>
-                      </div>
-                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <div style={{ flex:1, height:5, background:C.border, borderRadius:99, overflow:"hidden" }}>
-                          <div style={{ width:`${pct}%`, height:"100%", background:C.blue, borderRadius:99 }}/>
-                        </div>
-                        <span style={{ color:C.textDim, fontSize:10, fontFamily:F, flexShrink:0 }}>{plan.paid}/{plan.months} · <span style={{ color:C.accent, fontWeight:600 }}>{restantes} restante{restantes!==1?"s":""}</span></span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-          }
-        </SCard>
-      </div>
-
-      {/* ── 4. RESUMEN DE AHORROS ────────────────────────────────────────── */}
-      {(()=>{
-        const acumulado    = prevSavings + thisMoSavings;
-        const metaTotal    = Math.round(INCOME * savingsGoalPct / 100 * 12);
-        const pctMeta      = metaTotal > 0 ? Math.min(acumulado / metaTotal * 100, 100) : 0;
-        const mensualRate  = thisMoSavings > 0 ? thisMoSavings : Math.round(INCOME * savingsGoalPct / 100);
-        const mesesRest    = mensualRate > 0 && metaTotal > acumulado ? Math.ceil((metaTotal - acumulado) / mensualRate) : 0;
-        const posNeta      = acumulado - msiSaldoTotal;
-        const ahorroAdicional = Math.round(libreTotal * 0.5);
-        const periodoLabel = new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"}).toUpperCase();
-
-        return (
-          <SCard style={{ padding:"20px 24px" }}>
-            {/* Header con meta editable */}
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-              <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em" }}>Resumen de Ahorros</div>
-              <button onClick={()=>{ setGoalInput(String(savingsGoalPct)); setEditingGoal(v=>!v); }}
-                style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textMuted, cursor:"pointer", fontSize:11, padding:"2px 8px", fontFamily:F }}>
-                Meta {savingsGoalPct}% ✏️
-              </button>
-            </div>
-            {editingGoal&&(
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, padding:"6px 10px", background:C.accentDim, borderRadius:8, border:`1px solid ${C.accentGlow}` }}>
-                <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>Meta mínima mensual:</span>
-                <input type="number" min="1" max="100" value={goalInput} onChange={e=>setGoalInput(e.target.value)}
-                  style={{ ...IS, width:60, padding:"2px 6px", fontSize:12, textAlign:"center" }}/>
-                <span style={{ color:C.textDim, fontSize:11, fontFamily:F }}>%</span>
-                <button onClick={()=>{ const v=parseFloat(goalInput); if(!isNaN(v)&&v>0&&v<=100)setSavingsGoalPct(v); setEditingGoal(false); }}
-                  style={{ ...BtnP, padding:"3px 10px", fontSize:11 }}>OK</button>
-              </div>
-            )}
-
-            <div style={{ display:"grid", gridTemplateColumns:"38% 62%", gap:24 }}>
-
-              {/* ── Columna izquierda: acumulado ── */}
-              <div style={{ display:"flex", flexDirection:"column" }}>
-                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Ahorro acumulado</div>
-                <div style={{ color:C.accent, fontSize:52, fontWeight:600, fontFamily:F, lineHeight:1, marginBottom:4 }}>{fmt(acumulado)}</div>
-                <div style={{ color:C.textMuted, fontSize:12, fontFamily:F, marginBottom:14 }}>de {fmt(metaTotal)} meta anual</div>
-
-                {/* Barra gradiente */}
-                <div style={{ height:10, background:C.border, borderRadius:99, overflow:"hidden", marginBottom:6 }}>
-                  <div style={{ width:`${pctMeta}%`, height:"100%", borderRadius:99, background:"linear-gradient(90deg,#3D8EF5,#00D4A0)", transition:"width 0.7s ease" }}/>
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
-                  <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{fmt(acumulado)}</span>
-                  <span style={{ color:C.accent, fontSize:12, fontWeight:700, fontFamily:F }}>{pctMeta.toFixed(1)}%</span>
-                  <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{fmt(metaTotal)}</span>
-                </div>
-
-                {/* Foot metrics */}
-                <div style={{ display:"flex", background:C.surface, borderRadius:10, border:`1px solid ${C.border}`, overflow:"hidden", marginTop:"auto" }}>
-                  <div style={{ flex:1, padding:"10px 12px", borderRight:`1px solid ${C.border}` }}>
-                    <div style={{ color:C.textMuted, fontSize:9, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Ahorro mensual</div>
-                    <div style={{ color:C.accent, fontSize:16, fontWeight:700, fontFamily:F }}>{fmt(mensualRate)}</div>
-                  </div>
-                  <div style={{ flex:1, padding:"10px 12px" }}>
-                    <div style={{ color:C.textMuted, fontSize:9, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Meses restantes</div>
-                    <div style={{ color:C.textDim, fontSize:16, fontWeight:700, fontFamily:F }}>{mesesRest > 0 ? mesesRest : "—"}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Columna derecha: movimientos ── */}
-              <div style={{ display:"flex", flexDirection:"column" }}>
-                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:12 }}>
-                  Movimientos de ahorro — {periodoLabel}
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:6, flex:1 }}>
-                  {[
-                    { icon:"🏠", name:"Ahorro Departamento",        sub:"Fijo comprometido · transferencia mensual", amt:thisMoSavings,     col:C.accent, sign:"+" },
-                    { icon:"💰", name:"Excedente libre disponible", sub:"Del ingreso tras fijos + MSI + gastos",      amt:libreTotal,        col:C.accent, sign:"+" },
-                    { icon:"📈", name:"Posible ahorro adicional",   sub:"Si destinas el 50% del excedente libre",     amt:ahorroAdicional,   col:C.blue,   sign:"+" },
-                    { icon:"⚠️", name:"Deuda MSI activa",           sub:`Compromiso futuro en ${activeMsi.length} plan${activeMsi.length!==1?"es":""}`, amt:msiSaldoTotal, col:C.red, sign:"−" },
-                  ].map(r=>(
-                    <div key={r.name} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", background:C.surface, border:`1px solid ${C.border}`, borderRadius:10 }}>
-                      <div style={{ width:34, height:34, borderRadius:9, background:C.card, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{r.icon}</div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:600 }}>{r.name}</div>
-                        <div style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>{r.sub}</div>
-                      </div>
-                      <div style={{ color:r.col, fontSize:13, fontWeight:700, fontFamily:F, flexShrink:0 }}>{r.sign}{fmt(r.amt)}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Posición neta */}
-                <div style={{ borderTop:`1px solid ${C.border}`, marginTop:12, paddingTop:10, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                  <div>
-                    <div style={{ color:C.textDim, fontSize:12, fontFamily:F, fontWeight:600 }}>Posición neta de ahorro</div>
-                    <div style={{ color:C.textMuted, fontSize:10, fontFamily:F }}>{fmt(acumulado)} − {fmt(msiSaldoTotal)} deuda MSI</div>
-                  </div>
-                  <div style={{ color:posNeta>=0?C.accent:C.red, fontSize:20, fontWeight:700, fontFamily:F }}>{posNeta>=0?"+":""}{fmt(posNeta)}</div>
-                </div>
-              </div>
-
-            </div>
-          </SCard>
-        );
-      })()}
+      <SeccionPresupuesto porCategoria={d.porCategoria} presupuesto={d.presupuesto}/>
+      <SeccionAhorroMSI dash={d}/>
 
     </div>
   );
@@ -1854,6 +1628,227 @@ function LoginScreen() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── SECCIÓN PRESUPUESTO VS GASTO REAL ────────────────────────────────────────
+const GRUPOS = {
+  Esencial:     { color:"#E24B4A", cats:["Salud","Supermercado"] },
+  Importante:   { color:"#BA7517", cats:["Comida"] },
+  Flexible:     { color:"#378ADD", cats:["Transporte","Compras","Otros"] },
+  Prescindible: { color:"#888780", cats:["Suscripciones"] },
+};
+
+function SeccionPresupuesto({ porCategoria, presupuesto }) {
+  const gastoReal = {};
+  (porCategoria||[]).forEach(c=>{ gastoReal[c.categoria]=Number(c.total); });
+  const presupMap = {};
+  (presupuesto||[]).forEach(p=>{ presupMap[p.categoria]=Number(p.monto); });
+  return (
+    <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:10 }}>
+      <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>presupuesto vs gasto real</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:16 }}>
+        {Object.entries(GRUPOS).map(([nombre,{color,cats}])=>{
+          const totalGrupo  = cats.reduce((s,c)=>s+(gastoReal[c]||0),0);
+          const totalPresup = cats.reduce((s,c)=>s+(presupMap[c]||0),0);
+          const pctGrupo    = totalPresup>0?Math.min((totalGrupo/totalPresup)*100,100):0;
+          const excede      = totalGrupo>totalPresup&&totalPresup>0;
+          return (
+            <div key={nombre}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:6 }}>
+                <div style={{ fontSize:15, fontWeight:600, color }}>{nombre}</div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:20, fontWeight:600, color, lineHeight:1 }}>
+                    ${totalGrupo.toLocaleString("es-MX",{maximumFractionDigits:0})}
+                  </div>
+                  {totalPresup>0&&<div style={{ fontSize:11, color:C.muted }}>de ${totalPresup.toLocaleString("es-MX",{maximumFractionDigits:0})}</div>}
+                </div>
+              </div>
+              <div style={{ height:5, background:C.bg2, borderRadius:3, overflow:"hidden", marginBottom:8 }}>
+                <div style={{ height:"100%", width:`${pctGrupo}%`, background:excede?"#E24B4A":color, borderRadius:3 }}/>
+              </div>
+              {cats.map(cat=>{
+                const g=gastoReal[cat]||0; const p=presupMap[cat]||0;
+                const pct=p>0?Math.min((g/p)*100,100):0; const over=g>p&&p>0;
+                return (
+                  <div key={cat} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
+                    <div style={{ fontSize:11, color:C.muted, width:90, flexShrink:0, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{cat}</div>
+                    <div style={{ flex:1, height:3, background:C.bg2, borderRadius:2, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${pct}%`, background:over?"#E24B4A":color, opacity:0.7, borderRadius:2 }}/>
+                    </div>
+                    <div style={{ fontSize:11, width:52, textAlign:"right", flexShrink:0, color:g>0?(over?"#E24B4A":color):C.muted }}>
+                      ${g.toLocaleString("es-MX",{maximumFractionDigits:0})}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── SECCIÓN AHORRO + MSI ──────────────────────────────────────────────────────
+const META_DEPTO     = 150000;
+const AHORRO_MENSUAL = 10000;
+
+function SeccionAhorroMSI({ dash }) {
+  const acumulado      = dash?.acumulado ?? 26500;
+  const libre          = Number(dash?.libre||0);
+  const saldoMSI       = dash?.msiActivos?.filter(m=>Number(m.pagos_restantes)>0)
+                              .reduce((s,m)=>s+Number(m.saldo_pendiente),0)||0;
+  const mesesRestantes = AHORRO_MENSUAL>0&&acumulado<META_DEPTO?Math.ceil((META_DEPTO-acumulado)/AHORRO_MENSUAL):0;
+  const pctMeta        = Math.round(Math.min(acumulado/META_DEPTO*100,100));
+  const posicionNeta   = acumulado-saldoMSI;
+  const COLORS_MSI     = ["#185FA5","#D85A30","#1D9E75","#7F77DD","#BA7517"];
+  const planesActivos  = (dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0);
+  const cuotasMSI      = dash?.cuotasMSI||0;
+  const totLimCard     = dash?.totLim||0;
+  const utilPct        = totLimCard>0?Math.round(saldoMSI/totLimCard*100):0;
+
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+
+      {/* ── AHORRO ── */}
+      <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
+        <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>resumen de ahorros</div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
+          <div>
+            <div style={{ fontSize:44, fontWeight:600, color:"#1D9E75", lineHeight:1, letterSpacing:-1 }}>
+              ${acumulado.toLocaleString("es-MX")}
+            </div>
+            <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>acumulado para departamento</div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:11, color:C.muted }}>progreso meta</div>
+            <div style={{ fontSize:22, fontWeight:600, color:"#1D9E75" }}>{pctMeta}%</div>
+            <div style={{ fontSize:11, color:C.muted }}>de ${META_DEPTO.toLocaleString("es-MX")}</div>
+          </div>
+        </div>
+        <div style={{ height:8, background:C.bg2, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
+          <div style={{ height:"100%", width:`${pctMeta}%`, background:"linear-gradient(90deg,#185FA5,#1D9E75)", borderRadius:4 }}/>
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginBottom:12 }}>
+          <span>${acumulado.toLocaleString("es-MX")} acumulados</span>
+          <span>faltan ${(META_DEPTO-acumulado).toLocaleString("es-MX")}</span>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:C.border, borderRadius:8, overflow:"hidden", marginBottom:14 }}>
+          {[
+            { label:"ahorro mensual",  val:`$${AHORRO_MENSUAL.toLocaleString("es-MX")}`, color:"#1D9E75" },
+            { label:"meses restantes", val:mesesRestantes>0?`${mesesRestantes} meses`:"Meta cubierta", color:C.text },
+          ].map(k=>(
+            <div key={k.label} style={{ background:C.bg2, padding:"8px 12px" }}>
+              <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:2 }}>{k.label}</div>
+              <div style={{ fontSize:15, fontWeight:600, color:k.color }}>{k.val}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:8 }}>movimientos de ahorro</div>
+        {[
+          { name:"Ahorro Departamento",     tipo:"Fijo comprometido · transferencia mensual",       monto:`+$${AHORRO_MENSUAL.toLocaleString("es-MX")}`,                               color:"#1D9E75" },
+          { name:"Excedente libre",          tipo:"Del ingreso tras fijos + MSI + gastos",            monto:`+$${libre.toLocaleString("es-MX",{maximumFractionDigits:0})}`,             color:"#1D9E75" },
+          { name:"Posible ahorro adicional", tipo:"Si destinas el 50% del excedente",                monto:`+$${Math.round(libre*0.5).toLocaleString("es-MX")}`,                        color:"#378ADD" },
+          { name:"Deuda MSI activa",         tipo:`Compromiso futuro en ${planesActivos.length} planes`, monto:`−$${saldoMSI.toLocaleString("es-MX")}`,                               color:"#E24B4A" },
+        ].map(m=>(
+          <div key={m.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:`0.5px solid ${C.border}` }}>
+            <div>
+              <div style={{ fontSize:12, fontWeight:500, color:C.text }}>{m.name}</div>
+              <div style={{ fontSize:11, color:C.muted, marginTop:1 }}>{m.tipo}</div>
+            </div>
+            <div style={{ fontSize:13, fontWeight:600, color:m.color, flexShrink:0 }}>{m.monto}</div>
+          </div>
+        ))}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:10, marginTop:4, borderTop:`0.5px solid ${C.border}` }}>
+          <div>
+            <div style={{ fontSize:12, color:C.muted }}>Posición neta de ahorro</div>
+            <div style={{ fontSize:11, color:C.muted }}>${acumulado.toLocaleString("es-MX")} − ${saldoMSI.toLocaleString("es-MX")}</div>
+          </div>
+          <div style={{ fontSize:18, fontWeight:600, color:posicionNeta>=0?"#1D9E75":"#E24B4A" }}>
+            {posicionNeta>=0?"+":"−"}${Math.abs(posicionNeta).toLocaleString("es-MX")}
+          </div>
+        </div>
+      </div>
+
+      {/* ── CRÉDITO / MSI ── */}
+      <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
+        <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>distribución de crédito</div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
+          <div>
+            <div style={{ fontSize:44, fontWeight:600, color:"#D85A30", lineHeight:1, letterSpacing:-1 }}>
+              ${saldoMSI.toLocaleString("es-MX")}
+            </div>
+            <div style={{ fontSize:12, color:C.muted, marginTop:4 }}>saldo total en MSI</div>
+          </div>
+          {totLimCard>0&&<div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:11, color:C.muted }}>del límite comprometido</div>
+            <div style={{ fontSize:22, fontWeight:600, color:"#BA7517" }}>{utilPct}%</div>
+            <div style={{ fontSize:11, color:C.muted }}>${totLimCard.toLocaleString("es-MX")} límite total</div>
+          </div>}
+        </div>
+        {totLimCard>0&&<>
+          <div style={{ height:8, background:C.bg2, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
+            <div style={{ height:"100%", width:`${utilPct}%`, background:"linear-gradient(90deg,#1D9E75,#BA7517)", borderRadius:4 }}/>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginBottom:12 }}>
+            <span>${saldoMSI.toLocaleString("es-MX")} comprometido</span>
+            <span style={{ color:"#BA7517", fontWeight:500 }}>{utilPct}% utilizado</span>
+          </div>
+        </>}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:C.border, borderRadius:8, overflow:"hidden", marginBottom:14 }}>
+          {[
+            { label:"cuota mensual",     val:`$${cuotasMSI.toLocaleString("es-MX")}`,     color:"#D85A30" },
+            { label:"planes activos",    val:`${planesActivos.length} planes`,              color:"#378ADD" },
+          ].map(k=>(
+            <div key={k.label} style={{ background:C.bg2, padding:"8px 12px" }}>
+              <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:2 }}>{k.label}</div>
+              <div style={{ fontSize:14, fontWeight:600, color:k.color }}>{k.val}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:8 }}>planes activos</div>
+        {planesActivos.length===0
+          ? <div style={{ fontSize:12, color:C.muted }}>Sin planes MSI activos</div>
+          : planesActivos.map((m,idx)=>{
+              const color=COLORS_MSI[idx%COLORS_MSI.length];
+              const pagados=Number(m.pagos_hechos), total=Number(m.total_pagos), restantes=Number(m.pagos_restantes);
+              return (
+                <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"8px 0", borderBottom:`0.5px solid ${C.border}` }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12, fontWeight:600, marginBottom:4, color:C.text }}>{m.descripcion}</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginBottom:3 }}>
+                      {Array.from({length:total}).map((_,i)=>(
+                        <div key={i} style={{ width:9, height:9, borderRadius:"50%", background:color, opacity:i<pagados?1:0.2 }}/>
+                      ))}
+                    </div>
+                    <div style={{ fontSize:10, color:C.muted }}>
+                      {pagados}/{total} · vence {m.proxima_cuota?new Date(m.proxima_cuota).toLocaleDateString("es-MX",{month:"short",year:"numeric"}):"—"}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:"right", minWidth:80, marginLeft:8 }}>
+                    <div style={{ fontSize:15, fontWeight:600, color:"#D85A30", lineHeight:1 }}>
+                      ${Number(m.cuota_mensual).toLocaleString("es-MX")}<span style={{ fontSize:10, fontWeight:400, color:C.muted }}>/mes</span>
+                    </div>
+                    <div style={{ fontSize:11, marginTop:2, color:restantes<=3?"#BA7517":"#E24B4A" }}>
+                      ${Number(m.saldo_pendiente).toLocaleString("es-MX")}
+                    </div>
+                    <div style={{ fontSize:10, color:C.muted }}>saldo restante</div>
+                  </div>
+                </div>
+              );
+            })
+        }
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:10, marginTop:4, borderTop:`0.5px solid ${C.border}` }}>
+          <div style={{ fontSize:11, color:C.muted }}>cuota total · saldo total</div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:15, fontWeight:600, color:"#D85A30" }}>${cuotasMSI.toLocaleString("es-MX")}/mes</div>
+            <div style={{ fontSize:11, color:C.muted }}>${saldoMSI.toLocaleString("es-MX")} en {planesActivos.length} planes</div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
