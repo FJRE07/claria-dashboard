@@ -1892,6 +1892,7 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
   const [items,    setItems]    = useState(fijosData);
   const [editId,   setEditId]   = useState(null);
   const [editMode, setEditMode] = useState(false);
+  const [addMode,  setAddMode]  = useState(false);
   const [editData, setEditData] = useState({});
   const [nuevo,    setNuevo]    = useState({ detalle:"", categoria:"", monto:"" });
   const [saving,   setSaving]   = useState(false);
@@ -1948,42 +1949,55 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
 
   return (
     <div>
-      {/* Formulario agregar */}
-      <div style={{...S.card,marginBottom:16}}>
-        <div style={{fontSize:12,fontWeight:600,color:C.text,marginBottom:10}}>+ Agregar gasto fijo</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 180px 140px auto",gap:8,alignItems:"flex-end"}}>
-          <div>
-            <div style={S.label}>Detalle</div>
-            <input style={S.input} placeholder="ej. Netflix, Gym, Renta…" value={nuevo.detalle}
-              onChange={e=>setNuevo(p=>({...p,detalle:e.target.value}))}
-              onKeyDown={e=>e.key==="Enter"&&handleAgregar()}/>
+      {/* Modal flotante — agregar gasto fijo */}
+      {addMode&&(
+        <div onClick={()=>setAddMode(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:500,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"24px 28px",animation:"slideUp .2s ease"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+              <div style={{fontSize:15,fontWeight:600,color:C.text}}>Agregar gasto fijo</div>
+              <button onClick={()=>setAddMode(false)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
+              {[["Detalle","detalle","ej. Netflix, Gym, Renta…"],["Monto mensual","monto","$0"]].map(([l,k,ph])=>(
+                <div key={k}>
+                  <div style={S.label}>{l}</div>
+                  <input style={{...S.input,textAlign:k==="monto"?"right":"left"}} placeholder={ph} value={nuevo[k]}
+                    onChange={e=>setNuevo(p=>({...p,[k]:k==="monto"?e.target.value.replace(/[^0-9.]/g,""):e.target.value}))}
+                    onKeyDown={e=>e.key==="Enter"&&handleAgregar().then(()=>setAddMode(false))}/>
+                </div>
+              ))}
+              <div>
+                <div style={S.label}>Categoría</div>
+                <select style={S.select} value={nuevo.categoria} onChange={e=>setNuevo(p=>({...p,categoria:e.target.value}))}>
+                  <option value="">Selecciona…</option>
+                  {CATEGORIAS_FIJOS.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>setAddMode(false)} style={{padding:"8px 18px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,cursor:"pointer",fontSize:13}}>Cancelar</button>
+              <button onClick={async()=>{ await handleAgregar(); setAddMode(false); }} disabled={saving}
+                style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:500,opacity:saving?0.6:1}}>
+                {saving?"…":"Agregar"}
+              </button>
+            </div>
           </div>
-          <div>
-            <div style={S.label}>Categoría</div>
-            <select style={S.select} value={nuevo.categoria} onChange={e=>setNuevo(p=>({...p,categoria:e.target.value}))}>
-              <option value="">Selecciona…</option>
-              {CATEGORIAS_FIJOS.map(c=><option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={S.label}>Monto mensual</div>
-            <input style={{...S.input,textAlign:"right"}} placeholder="$0" value={nuevo.monto}
-              onChange={e=>setNuevo(p=>({...p,monto:e.target.value.replace(/[^0-9.]/g,"")}))}/>
-          </div>
-          <button style={S.btnAdd} onClick={handleAgregar} disabled={saving}>{saving?"…":"Agregar"}</button>
         </div>
-      </div>
+      )}
 
       {/* Lista agrupada */}
       <div style={S.card}>
-        {/* Resumen al tope */}
+        {/* Header con botones */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <div style={{fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:".05em"}}>gastos fijos declarados</div>
-            <button onClick={()=>setEditMode(m=>!m)} style={{padding:"4px 12px",borderRadius:7,fontSize:11,fontFamily:F,border:`1px solid ${editMode?C.accent:C.border}`,background:editMode?C.accentDim:"transparent",color:editMode?C.accent:C.textDim,cursor:"pointer"}}>{editMode?"Listo":"Gestionar"}</button>
-          {items.length>0&&<div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:11,color:C.muted}}>{items.length} conceptos</span>
-            <span style={{fontSize:16,fontWeight:700,color:"#D4537E"}}>{$f(total)}</span>
-          </div>}
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:".05em"}}>gastos fijos declarados</div>
+            {items.length>0&&<><span style={{fontSize:11,color:C.muted}}>{items.length} conceptos</span>
+              <span style={{fontSize:16,fontWeight:700,color:"#D4537E"}}>{$f(total)}</span></>}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setEditMode(m=>!m)} style={{padding:"5px 14px",borderRadius:8,fontSize:12,fontFamily:F,border:`1px solid ${editMode?C.accent:C.border}`,background:editMode?C.accentDim:"transparent",color:editMode?C.accent:C.textDim,cursor:"pointer"}}>{editMode?"Listo":"Gestionar"}</button>
+            <button onClick={()=>setAddMode(true)} style={{padding:"5px 14px",borderRadius:8,fontSize:12,fontFamily:F,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}}>+ Agregar</button>
+          </div>
         </div>
         {Object.entries(grupos).map(([cat,catItems],gi)=>{
           const color=CAT_COLORS_FIJOS[cat]||"#888";
@@ -2083,6 +2097,7 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
   const [nuevo,    setNuevo]    = useState({nombre:"",sub:"",prioridad:"Flexible",monto:""});
   const [saving,   setSaving]   = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [addMode,  setAddMode]  = useState(false);
 
   const $f = n=>"$"+Number(n).toLocaleString("es-MX",{maximumFractionDigits:0});
   const totalAsignado = cats.reduce((s,c)=>s+c.monto,0);
@@ -2116,53 +2131,62 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
 
   return (
     <div style={{color:C.text}}>
+
+      {/* Modal flotante — nueva categoría */}
+      {addMode&&(
+        <div onClick={()=>setAddMode(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:480,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"24px 28px",animation:"slideUp .2s ease"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+              <div style={{fontSize:15,fontWeight:600,color:C.text}}>Nueva categoría</div>
+              <button onClick={()=>setAddMode(false)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
+              {[["Nombre","nombre","ej. Streaming, Mascotas…"],["Descripción","sub","opcional"]].map(([l,k,ph])=>(
+                <div key={k}><div style={{fontSize:11,color:C.muted,marginBottom:4}}>{l}</div>
+                  <input style={S.newInput} placeholder={ph} value={nuevo[k]} onChange={e=>setNuevo(p=>({...p,[k]:e.target.value}))}/></div>
+              ))}
+              <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Prioridad</div>
+                <select style={{...S.newInput,cursor:"pointer"}} value={nuevo.prioridad} onChange={e=>setNuevo(p=>({...p,prioridad:e.target.value}))}>
+                  {PRIORIDADES.map(p=><option key={p.key} value={p.key}>{p.key}</option>)}
+                </select></div>
+              <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Monto</div>
+                <input style={{...S.newInput,textAlign:"right"}} placeholder="$0" value={nuevo.monto}
+                  onChange={e=>setNuevo(p=>({...p,monto:e.target.value.replace(/[^0-9.]/g,"")}))}
+                  onKeyDown={e=>{ if(e.key==="Enter"){handleAgregar();setAddMode(false);} }}/></div>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>setAddMode(false)} style={{padding:"8px 18px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,cursor:"pointer",fontSize:13}}>Cancelar</button>
+              <button onClick={()=>{handleAgregar();setAddMode(false);}} style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:500}}>Agregar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div>
           <div style={{fontSize:13,fontWeight:600}}>Diseña tu presupuesto mensual</div>
           <div style={{fontSize:11,color:C.muted,marginTop:2}}>Edita montos directo · arrastra categorías entre prioridades</div>
         </div>
         <div style={{display:"flex",gap:8}}>
           <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,border:`1px solid ${editMode?C.red:C.border}`,background:editMode?"#E24B4A18":"transparent",color:editMode?"#E24B4A":C.textDim,cursor:"pointer"}} onClick={()=>setEditMode(m=>!m)}>{editMode?"Listo":"Gestionar"}</button>
+          <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}} onClick={()=>setAddMode(true)}>+ Agregar</button>
           <button style={S.btn} onClick={handleGuardar} disabled={saving}>{saving?"Guardando…":"Guardar cambios"}</button>
         </div>
       </div>
 
-      {/* Formulario agregar */}
-      <div style={{background:C.card,border:`0.5px solid ${C.border}`,borderRadius:10,padding:"10px 14px",marginBottom:14}}>
-        <div style={{fontSize:12,fontWeight:600,color:C.text,marginBottom:8}}>+ Nueva categoría</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 140px 120px 100px auto",gap:8,alignItems:"flex-end"}}>
-          {[["Nombre","nombre","ej. Streaming…"],["Descripción","sub","opcional"]].map(([l,k,ph])=>(
-            <div key={k}><div style={{fontSize:11,color:C.muted,marginBottom:4}}>{l}</div>
-              <input style={S.newInput} placeholder={ph} value={nuevo[k]} onChange={e=>setNuevo(p=>({...p,[k]:e.target.value}))}/></div>
-          ))}
-          <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Prioridad</div>
-            <select style={{...S.newInput,cursor:"pointer"}} value={nuevo.prioridad} onChange={e=>setNuevo(p=>({...p,prioridad:e.target.value}))}>
-              {PRIORIDADES.map(p=><option key={p.key} value={p.key}>{p.key}</option>)}
-            </select></div>
-          <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Monto</div>
-            <input style={{...S.newInput,textAlign:"right"}} placeholder="$0" value={nuevo.monto}
-              onChange={e=>setNuevo(p=>({...p,monto:e.target.value.replace(/[^0-9.]/g,"")}))}
-              onKeyDown={e=>e.key==="Enter"&&handleAgregar()}/></div>
-          <button style={{...S.btn,padding:"7px 14px"}} onClick={handleAgregar}>Agregar</button>
+      {/* Resúmenes — 2 cards grandes */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+        <div style={{background:C.card,border:`1px solid ${C.accentGlow}`,borderRadius:14,padding:"20px 24px"}}>
+          <div style={{fontSize:10,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Presupuesto asignado</div>
+          <div style={{fontSize:32,fontWeight:700,color:C.accent,lineHeight:1,marginBottom:4}}>{$f(totalAsignado)}</div>
+          <div style={{fontSize:12,color:C.textMuted}}>{Math.round(totalAsignado/ingreso*100)}% del ingreso mensual</div>
         </div>
-      </div>
-
-      {/* Barra distribución */}
-      <div style={S.bar}>
-        {segs.map(s=><div key={s.key} style={S.barSeg(s.color,s.pctBarra)}/>)}
-        <div style={S.barSeg(C.bg2||"#1e1e2e",pctLibre)}/>
-      </div>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:10}}>
-        {segs.map(s=><span key={s.key} style={{color:s.color}}>{s.key} {s.pctBarra}%</span>)}
-        <span>Sin asignar {pctLibre}%</span>
-      </div>
-
-      {/* Resúmenes */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
-        <div style={S.sumCard}><div style={{fontSize:11,color:C.muted,marginBottom:3}}>presupuesto asignado</div><div style={{fontSize:16,fontWeight:600,color:"#1D9E75"}}>{$f(totalAsignado)}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{Math.round(totalAsignado/ingreso*100)}% del ingreso</div></div>
-        <div style={S.sumCard}><div style={{fontSize:11,color:C.muted,marginBottom:3}}>sin asignar (colchón)</div><div style={{fontSize:16,fontWeight:600,color:"#378ADD"}}>{$f(sinAsignar)}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{pctLibre}% disponible</div></div>
-        <div style={S.sumCard}><div style={{fontSize:11,color:C.muted,marginBottom:3}}>regla 50/30/20</div><div style={{fontSize:16,fontWeight:600,color:"#BA7517"}}>{pctPor("Esencial")}/{pctPor("Importante")}/{pctPor("Flexible")}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{pctPor("Esencial")>50?"Esencial > 50%":"Distribución OK ✅"}</div></div>
+        <div style={{background:C.card,border:`1px solid ${C.blueDim}`,borderRadius:14,padding:"20px 24px"}}>
+          <div style={{fontSize:10,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Sin asignar — colchón</div>
+          <div style={{fontSize:32,fontWeight:700,color:sinAsignar<=0?C.red:C.blue,lineHeight:1,marginBottom:4}}>{$f(sinAsignar)}</div>
+          <div style={{fontSize:12,color:C.textMuted}}>{pctLibre}% disponible libre</div>
+        </div>
       </div>
 
       {/* Kanban */}
