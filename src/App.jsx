@@ -264,11 +264,11 @@ const SCard = ({ children, style={}, onClick }) => (
 const Label = ({ children }) => (
   <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>{children}</div>
 );
-const ScoreGauge = ({ score }) => {
+const ScoreGauge = ({ score, w=140, h=105 }) => {
   const r=58,cx=78,cy=78,s0=-220,s1=40,toRad=d=>(d*Math.PI)/180;
   const arc=(a1,a2)=>{const x1=cx+r*Math.cos(toRad(a1)),y1=cy+r*Math.sin(toRad(a1)),x2=cx+r*Math.cos(toRad(a2)),y2=cy+r*Math.sin(toRad(a2));return`M ${x1} ${y1} A ${r} ${r} 0 ${a2-a1>180?1:0} 1 ${x2} ${y2}`;};
   const vd=s0+(score/100)*(s1-s0), col=score>=70?C.accent:score>=40?C.yellow:C.red;
-  return <svg viewBox="0 0 156 116" style={{ width:140, height:105 }}>
+  return <svg viewBox="0 0 156 116" style={{ width:w, height:h }}>
     <path d={arc(s0,s1)} fill="none" stroke={C.border} strokeWidth={9} strokeLinecap="round"/>
     <path d={arc(s0,vd)} fill="none" stroke={col} strokeWidth={9} strokeLinecap="round"/>
     <text x={cx} y={cy+4}  textAnchor="middle" fill={col}      fontSize={30} fontWeight={700} fontFamily={F}>{score}</text>
@@ -1162,10 +1162,11 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     cuotasMSI:  activeMsi.reduce((s,p)=>s+p.mo,0),
     totLim,
     totUsed,
+    ahorroMensual: thisMoSavings > 0 ? thisMoSavings : AHORRO_MENSUAL,
   };
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
       {/* ── 1. KPI BAR ───────────────────────────────────────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
@@ -1186,12 +1187,12 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
 
       {/* ── 2. SCORE FINANCIERO ──────────────────────────────────────────── */}
       <SCard style={{ padding:"20px 24px" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", alignItems:"stretch" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"40% 60%", alignItems:"stretch" }}>
 
           {/* Gauge izquierda */}
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", paddingRight:24, borderRight:`1px solid ${C.border}`, minWidth:140 }}>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", paddingRight:24, borderRight:`1px solid ${C.border}` }}>
             <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Score financiero</div>
-            <ScoreGauge score={score}/>
+            <ScoreGauge score={score} w={190} h={143}/>
           </div>
 
           {/* 5 indicadores financieros */}
@@ -1647,7 +1648,7 @@ function SeccionPresupuesto({ porCategoria, presupuesto }) {
   const presupMap = {};
   (presupuesto||[]).forEach(p=>{ presupMap[p.categoria]=Number(p.monto); });
   return (
-    <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px", marginBottom:10 }}>
+    <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
       <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>presupuesto vs gasto real</div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:16 }}>
         {Object.entries(GRUPOS).map(([nombre,{color,cats}])=>{
@@ -1656,7 +1657,7 @@ function SeccionPresupuesto({ porCategoria, presupuesto }) {
           const pctGrupo    = totalPresup>0?Math.min((totalGrupo/totalPresup)*100,100):0;
           const excede      = totalGrupo>totalPresup&&totalPresup>0;
           return (
-            <div key={nombre}>
+            <div key={nombre} style={{ background:`${excede?"#E24B4A":color}12`, border:`1px solid ${excede?"#E24B4A":color}40`, borderRadius:10, padding:"10px 12px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:6 }}>
                 <div style={{ fontSize:15, fontWeight:600, color }}>{nombre}</div>
                 <div style={{ textAlign:"right" }}>
@@ -1697,11 +1698,12 @@ const META_DEPTO     = 150000;
 const AHORRO_MENSUAL = 10000;
 
 function SeccionAhorroMSI({ dash }) {
-  const acumulado      = dash?.acumulado ?? 26500;
+  const acumulado      = dash?.acumulado ?? 0;
   const libre          = Number(dash?.libre||0);
+  const ahorroMensual  = dash?.ahorroMensual || AHORRO_MENSUAL;
   const saldoMSI       = dash?.msiActivos?.filter(m=>Number(m.pagos_restantes)>0)
                               .reduce((s,m)=>s+Number(m.saldo_pendiente),0)||0;
-  const mesesRestantes = AHORRO_MENSUAL>0&&acumulado<META_DEPTO?Math.ceil((META_DEPTO-acumulado)/AHORRO_MENSUAL):0;
+  const mesesRestantes = ahorroMensual>0&&acumulado<META_DEPTO?Math.ceil((META_DEPTO-acumulado)/ahorroMensual):0;
   const pctMeta        = Math.round(Math.min(acumulado/META_DEPTO*100,100));
   const posicionNeta   = acumulado-saldoMSI;
   const COLORS_MSI     = ["#185FA5","#D85A30","#1D9E75","#7F77DD","#BA7517"];
@@ -1712,7 +1714,7 @@ function SeccionAhorroMSI({ dash }) {
   const utilPct        = totLimCard>0?Math.round(totUsedCard/totLimCard*100):0;
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
 
       {/* ── AHORRO ── */}
       <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
@@ -1739,7 +1741,7 @@ function SeccionAhorroMSI({ dash }) {
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:C.border, borderRadius:8, overflow:"hidden", marginBottom:14 }}>
           {[
-            { label:"ahorro mensual",  val:`$${AHORRO_MENSUAL.toLocaleString("es-MX")}`, color:"#1D9E75" },
+            { label:"ahorro mensual",  val:`$${ahorroMensual.toLocaleString("es-MX")}`, color:"#1D9E75" },
             { label:"meses restantes", val:mesesRestantes>0?`${mesesRestantes} meses`:"Meta cubierta", color:C.text },
           ].map(k=>(
             <div key={k.label} style={{ background:C.bg2, padding:"8px 12px" }}>
@@ -1750,7 +1752,7 @@ function SeccionAhorroMSI({ dash }) {
         </div>
         <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:8 }}>movimientos de ahorro</div>
         {[
-          { name:"Ahorro Departamento",     tipo:"Fijo comprometido · transferencia mensual",       monto:`+$${AHORRO_MENSUAL.toLocaleString("es-MX")}`,                               color:"#1D9E75" },
+          { name:"Ahorro Departamento",     tipo:"Fijo comprometido · transferencia mensual",       monto:`+$${ahorroMensual.toLocaleString("es-MX")}`,                               color:"#1D9E75" },
           { name:"Excedente libre",          tipo:"Del ingreso tras fijos + MSI + gastos",            monto:`+$${libre.toLocaleString("es-MX",{maximumFractionDigits:0})}`,             color:"#1D9E75" },
           { name:"Posible ahorro adicional", tipo:"Si destinas el 50% del excedente",                monto:`+$${Math.round(libre*0.5).toLocaleString("es-MX")}`,                        color:"#378ADD" },
           { name:"Deuda MSI activa",         tipo:`Compromiso futuro en ${planesActivos.length} planes`, monto:`−$${saldoMSI.toLocaleString("es-MX")}`,                               color:"#E24B4A" },
@@ -1981,7 +1983,6 @@ function Dashboard({ logout }) {
             <h1 style={{ color:C.text, fontSize:18, fontWeight:700, letterSpacing:"-0.025em", fontFamily:F }}>{TABS.find(t=>t.id===tab)?.label}</h1>
             <p style={{ color:C.textMuted, fontSize:12, marginTop:2, fontFamily:F }}>Mayo 2026 · {txs.length} movimientos</p>
           </div>
-          <NotificationBell alerts={alerts}/>
           <button onClick={logout} title="Cerrar sesión"
             style={{ width:36, height:36, borderRadius:10, background:"transparent", border:`1px solid ${C.border}`, cursor:"pointer", color:C.textDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red;e.currentTarget.style.color=C.red;}}
