@@ -2104,7 +2104,7 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
     bar:     {height:14,borderRadius:7,overflow:"hidden",display:"flex",marginBottom:6,gap:2},
     barSeg:  (color,pct)=>({height:"100%",width:`${pct}%`,background:color,borderRadius:4,transition:"width .3s"}),
     sumCard: {background:C.bg2,borderRadius:10,padding:"10px 14px",border:`0.5px solid ${C.border}`},
-    laneWrap:{borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column"},
+    laneWrap:(color)=>({borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column"}),
     laneHead:(color)=>({padding:"12px 14px 10px",background:color+"18",borderRadius:"12px 12px 0 0"}),
     laneBody:(color)=>({flex:1,padding:"6px 8px 8px",background:color+"08",display:"flex",flexDirection:"column",gap:5,minHeight:100}),
     catCard: (color,first)=>({borderRadius:8,padding:"8px 10px",border:`0.5px solid ${color}${first?"44":"22"}`,background:color+(first?"18":"0e"),position:"relative",cursor:"grab"}),
