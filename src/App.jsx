@@ -1187,7 +1187,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
 
       {/* ── 2. SCORE FINANCIERO ──────────────────────────────────────────── */}
       <SCard style={{ padding:"20px 24px" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"40% 60%", alignItems:"stretch" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"35% 65%", alignItems:"stretch" }}>
 
           {/* Gauge izquierda */}
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", paddingRight:24, borderRight:`1px solid ${C.border}` }}>
@@ -1855,11 +1855,208 @@ function SeccionAhorroMSI({ dash }) {
   );
 }
 
+// ── KPI STRIP COMPARTIDA (sin Gastado Variable) ──────────────────────────────
+function KpiStrip({ income, fixedItems, msiPlans, txs=[] }) {
+  const totalFixed = fixedItems.reduce((s,f)=>s+f.amt,0);
+  const totalMSI   = msiPlans.filter(p=>p.paid<p.months).reduce((s,p)=>s+p.mo,0);
+  const gastoVar   = txs.filter(t=>t.amt<0&&t.cat!=="Ahorro").reduce((s,t)=>s+Math.abs(t.amt),0);
+  const libre      = Math.max(0, income-totalFixed-totalMSI-gastoVar);
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+      {[
+        { lbl:"Ingreso mensual", val:fmt(income),     col:C.accent,  sub:null },
+        { lbl:"Gastos fijos",    val:fmt(totalFixed), col:C.red,     sub:income>0?`${Math.round(totalFixed/income*100)}% del ingreso`:null },
+        { lbl:"MSI / mes",       val:fmt(totalMSI),   col:C.yellow,  sub:income>0?`${Math.round(totalMSI/income*100)}% del ingreso`:null },
+        { lbl:"Saldo libre",     val:fmt(libre),      col:libre<=0?C.red:C.accent, sub:null },
+      ].map(k=>(
+        <div key={k.lbl} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6 }}>
+          <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>{k.lbl}</span>
+          <span style={{ color:k.col, fontSize:26, fontWeight:700, fontFamily:F, lineHeight:1.1 }}>{k.val}</span>
+          {k.sub&&<span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>{k.sub}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── TAB GASTOS FIJOS ──────────────────────────────────────────────────────────
+const CATEGORIAS_FIJOS = [
+  "Inversión","Gimnasio","Trabajo / Consulta",
+  "Entretenimiento","Celular","Transporte",
+  "Salud","Servicios","Vivienda","Otro",
+];
+const CAT_COLORS_FIJOS = {
+  "Inversión":"#7F77DD","Gimnasio":"#1D9E75","Trabajo / Consulta":"#378ADD",
+  "Entretenimiento":"#BA7517","Celular":"#888780","Transporte":"#D85A30",
+  "Salud":"#E24B4A","Servicios":"#639922","Vivienda":"#185FA5","Otro":"#5F5E5A",
+};
+
+function TabFijos({ fijosData=[], onSave, onDelete }) {
+  const [items,    setItems]    = useState(fijosData);
+  const [editId,   setEditId]   = useState(null);
+  const [editData, setEditData] = useState({});
+  const [nuevo,    setNuevo]    = useState({ detalle:"", categoria:"", monto:"" });
+  const [saving,   setSaving]   = useState(false);
+
+  const total = items.reduce((s,i)=>s+Number(i.monto),0);
+  const $f    = n=>"$"+Number(n).toLocaleString("es-MX",{minimumFractionDigits:0,maximumFractionDigits:0});
+
+  const grupos = items.reduce((acc,item)=>{
+    const cat=item.categoria||item.grupo||"Otro";
+    if(!acc[cat])acc[cat]=[];
+    acc[cat].push(item); return acc;
+  },{});
+
+  const handleAgregar = async()=>{
+    if(!nuevo.detalle||!nuevo.categoria||!nuevo.monto)return;
+    setSaving(true);
+    try{
+      const item={...nuevo,monto:Number(nuevo.monto),id:Date.now()};
+      if(onSave)await onSave(item);
+      setItems(p=>[...p,item]);
+      setNuevo({detalle:"",categoria:"",monto:""});
+    }finally{setSaving(false);}
+  };
+  const handleEdit=(item)=>{
+    setEditId(item.id);
+    setEditData({detalle:item.detalle,categoria:item.categoria||item.grupo,monto:item.monto});
+  };
+  const handleSaveEdit=async(id)=>{
+    setSaving(true);
+    try{
+      const updated=items.map(i=>i.id===id?{...i,...editData,monto:Number(editData.monto)}:i);
+      if(onSave)await onSave({id,...editData,monto:Number(editData.monto)});
+      setItems(updated); setEditId(null);
+    }finally{setSaving(false);}
+  };
+  const handleDelete=async(id)=>{
+    if(!window.confirm("¿Eliminar este gasto fijo?"))return;
+    if(onDelete)await onDelete(id);
+    setItems(p=>p.filter(i=>i.id!==id));
+  };
+
+  const S={
+    card:   {background:C.card,border:`0.5px solid ${C.border}`,borderRadius:12,padding:"14px 16px"},
+    label:  {fontSize:11,color:C.muted,marginBottom:5},
+    input:  {width:"100%",background:C.bg2,border:`0.5px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,outline:"none"},
+    select: {width:"100%",background:C.bg2,border:`0.5px solid ${C.border}`,borderRadius:8,padding:"8px 10px",fontSize:13,color:C.text,outline:"none"},
+    btnAdd: {padding:"8px 16px",background:"#185FA5",border:"none",borderRadius:8,color:"#fff",fontSize:13,fontWeight:500,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1,height:36,whiteSpace:"nowrap"},
+    btnIcon:{width:28,height:28,borderRadius:6,border:`0.5px solid ${C.border}`,background:C.card,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12},
+    btnDel: {borderColor:"#E24B4A44",background:"#E24B4A11",color:"#E24B4A"},
+    btnSave:{padding:"4px 10px",background:"#185FA5",border:"none",borderRadius:6,color:"#fff",fontSize:11,fontWeight:500,cursor:"pointer"},
+    btnCanc:{padding:"4px 10px",background:"transparent",border:`0.5px solid ${C.border}`,borderRadius:6,color:C.muted,fontSize:11,cursor:"pointer"},
+    tag:    (cat)=>({display:"inline-block",fontSize:10,padding:"2px 7px",borderRadius:6,fontWeight:500,background:(CAT_COLORS_FIJOS[cat]||"#888")+"22",color:CAT_COLORS_FIJOS[cat]||"#888"}),
+  };
+
+  return (
+    <div>
+      {/* Formulario agregar */}
+      <div style={{...S.card,marginBottom:10,background:C.bg2,border:`0.5px dashed ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:500,marginBottom:10}}>+ Agregar gasto fijo</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 180px 140px auto",gap:8,alignItems:"flex-end"}}>
+          <div>
+            <div style={S.label}>Detalle</div>
+            <input style={S.input} placeholder="ej. Netflix, Gym, Renta…" value={nuevo.detalle}
+              onChange={e=>setNuevo(p=>({...p,detalle:e.target.value}))}
+              onKeyDown={e=>e.key==="Enter"&&handleAgregar()}/>
+          </div>
+          <div>
+            <div style={S.label}>Categoría</div>
+            <select style={S.select} value={nuevo.categoria} onChange={e=>setNuevo(p=>({...p,categoria:e.target.value}))}>
+              <option value="">Selecciona…</option>
+              {CATEGORIAS_FIJOS.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={S.label}>Monto mensual</div>
+            <input style={{...S.input,textAlign:"right"}} placeholder="$0" value={nuevo.monto}
+              onChange={e=>setNuevo(p=>({...p,monto:e.target.value.replace(/[^0-9.]/g,"")}))}/>
+          </div>
+          <button style={S.btnAdd} onClick={handleAgregar} disabled={saving}>{saving?"…":"Agregar"}</button>
+        </div>
+      </div>
+
+      {/* Lista agrupada */}
+      <div style={S.card}>
+        <div style={{fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:".05em",marginBottom:14}}>gastos fijos declarados</div>
+        {Object.entries(grupos).map(([cat,catItems],gi)=>{
+          const color=CAT_COLORS_FIJOS[cat]||"#888";
+          const catTotal=catItems.reduce((s,i)=>s+Number(i.monto),0);
+          const catPct=total>0?Math.round(catTotal/total*100):0;
+          return (
+            <div key={cat} style={{marginBottom:gi<Object.keys(grupos).length-1?16:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:3,height:16,borderRadius:2,background:color,flexShrink:0}}/>
+                  <span style={{fontSize:13,fontWeight:600,color}}>{cat}</span>
+                  <span style={{fontSize:11,color:C.muted}}>{catItems.length} {catItems.length===1?"concepto":"conceptos"}</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:11,color:C.muted}}>{catPct}%</span>
+                  <span style={{fontSize:14,fontWeight:600,color}}>{$f(catTotal)}</span>
+                </div>
+              </div>
+              {catItems.map(item=>(
+                <div key={item.id} style={{display:"grid",gridTemplateColumns:"1fr 100px 80px 60px",gap:8,alignItems:"center",padding:"8px 10px 8px 14px",marginBottom:4,borderRadius:8,background:C.bg2,border:`0.5px solid ${editId===item.id?"#185FA5":C.border}`}}>
+                  {editId===item.id?(
+                    <>
+                      <input style={{...S.input,padding:"5px 8px",fontSize:12}} value={editData.detalle}
+                        onChange={e=>setEditData(p=>({...p,detalle:e.target.value}))}/>
+                      <select style={{...S.select,padding:"5px 8px",fontSize:12}} value={editData.categoria}
+                        onChange={e=>setEditData(p=>({...p,categoria:e.target.value}))}>
+                        {CATEGORIAS_FIJOS.map(c=><option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <input style={{...S.input,padding:"5px 8px",fontSize:12,textAlign:"right"}} value={editData.monto}
+                        onChange={e=>setEditData(p=>({...p,monto:e.target.value.replace(/[^0-9.]/g,"")}))}/>
+                      <div style={{display:"flex",gap:4,flexDirection:"column"}}>
+                        <button style={S.btnSave} onClick={()=>handleSaveEdit(item.id)}>✓</button>
+                        <button style={S.btnCanc} onClick={()=>setEditId(null)}>✕</button>
+                      </div>
+                    </>
+                  ):(
+                    <>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:500,color:C.text}}>{item.detalle}</div>
+                        <div style={{height:2,background:C.card,borderRadius:1,overflow:"hidden",marginTop:4,width:"80%"}}>
+                          <div style={{height:"100%",width:`${Math.min(Number(item.monto)/total*100*3,100)}%`,background:color,opacity:0.6,borderRadius:1}}/>
+                        </div>
+                      </div>
+                      <div style={{fontSize:11,color:C.muted,textAlign:"center"}}>{Math.round(Number(item.monto)/total*100)}% del total</div>
+                      <div style={{fontSize:14,fontWeight:600,color,textAlign:"right"}}>{$f(item.monto)}</div>
+                      <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+                        <button style={S.btnIcon} onClick={()=>handleEdit(item)}>✏️</button>
+                        <button style={{...S.btnIcon,...S.btnDel}} onClick={()=>handleDelete(item.id)}>✕</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+        {items.length>0&&(
+          <>
+            <div style={{height:"0.5px",background:C.border,margin:"12px 0"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:13,color:C.muted}}>Total comprometido · {items.length} conceptos</span>
+              <span style={{fontSize:18,fontWeight:600,color:"#D4537E"}}>{$f(total)}</span>
+            </div>
+          </>
+        )}
+        {items.length===0&&(
+          <div style={{textAlign:"center",padding:"24px 0",color:C.muted,fontSize:13}}>
+            No hay gastos fijos declarados. Agrega el primero arriba.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const TABS=[
   { id:"estado",       label:"Estado",        icon:"📊" },
   { id:"fixed",        label:"Gastos Fijos",  icon:"📌" },
   { id:"cards",        label:"Tarjetas",      icon:"💳" },
-  { id:"msi",          label:"Planes MSI",    icon:"🔒" },
   { id:"budget",       label:"Presupuestos",  icon:"🎯" },
   { id:"transactions", label:"Transacciones", icon:"↕️"  },
 ];
@@ -1990,10 +2187,20 @@ function Dashboard({ logout }) {
         </header>
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px" }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}/>}
-          {tab==="fixed"        &&<FixedExpenses items={fixedItems} setItems={setFixedItems} income={income}/>}
+          {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
+            <TabFijos
+              fijosData={fixedItems.map(f=>({id:f.id,detalle:f.name,categoria:f.cat,grupo:f.cat,monto:f.amt,icono:f.icon,dia_cobro:f.day}))}
+              onSave={async(item)=>{
+                const payload={detalle:item.detalle,monto:Number(item.monto),grupo:item.categoria||item.grupo||"Otro",icono:item.icono||"💡",dia_cobro:item.dia_cobro||1};
+                const existing=fixedItems.find(f=>f.id===item.id);
+                if(existing){const u=await API.putFijo(item.id,payload).catch(console.error);if(u)setFixedItems(p=>p.map(f=>f.id===item.id?mapApiFijo(u,0):f));}
+                else{const c=await API.postFijo(payload).catch(console.error);if(c)setFixedItems(p=>[...p,mapApiFijo(c,p.length)]);}
+              }}
+              onDelete={async(id)=>{await API.deleteFijo(id).catch(console.error);setFixedItems(p=>p.filter(f=>f.id!==id));}}
+            /></>}
           {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} onImportDone={cargarDatos}/>}
-          {tab==="msi"          &&<MSIPlans      plans={msiPlans} cards={cards}/>}
-          {tab==="budget"       &&<Budget        groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income} txs={txs}/>}
+          {tab==="budget"       &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
+            <Budget groupBudgets={groupBudgets} setGroupBudgets={saveGroupBudgets} income={income} txs={txs}/></>}
           {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards}/>}
         </div>
       </main>
