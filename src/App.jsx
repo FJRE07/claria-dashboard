@@ -2008,8 +2008,8 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
           <div style={{fontSize:11,color:C.muted,marginTop:2}}>Edita montos, reagrupa por categoría y organiza tus compromisos mensuales</div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setEditMode(m=>!m)} style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontFamily:F,border:`1px solid ${editMode?C.accent:C.border}`,background:editMode?C.accentDim:"transparent",color:editMode?C.accent:C.textDim,cursor:"pointer"}}>{editMode?"Listo":"Gestionar"}</button>
-          <button onClick={()=>setAddMode(true)} style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontFamily:F,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}}>+ Agregar</button>
+          <button onClick={()=>setEditMode(m=>!m)} style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:500,border:`1px solid ${editMode?C.accent:C.border}`,background:editMode?C.accentDim:"transparent",color:editMode?C.accent:C.textDim,cursor:"pointer"}}>{editMode?"Listo":"Gestionar"}</button>
+          <button onClick={()=>setAddMode(true)} style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:500,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}}>+ Agregar</button>
         </div>
       </div>
 
@@ -2221,11 +2221,11 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
           <div style={{fontSize:11,color:C.muted,marginTop:2}}>Edita montos directo · arrastra categorías entre prioridades</div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,border:`1px solid ${editMode?C.red:C.border}`,background:editMode?"#E24B4A18":"transparent",color:editMode?"#E24B4A":C.textDim,cursor:"pointer"}}
+          <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:500,border:`1px solid ${editMode?C.accent:C.border}`,background:editMode?C.accentDim:"transparent",color:editMode?C.accent:C.textDim,cursor:"pointer"}}
             onClick={()=>{ if(editMode) handleGuardar(); setEditMode(m=>!m); }}>
             {saving?"Guardando…":editMode?"Listo":"Gestionar"}
           </button>
-          <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}} onClick={()=>setAddMode(true)}>+ Agregar</button>
+          <button style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:500,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}} onClick={()=>setAddMode(true)}>+ Agregar</button>
         </div>
       </div>
 
