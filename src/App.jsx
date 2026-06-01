@@ -2001,6 +2001,18 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
 
   return (
     <div>
+      {/* Header — mismo patrón que Presupuestos */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600,color:C.text}}>Gestiona tus gastos fijos</div>
+          <div style={{fontSize:11,color:C.muted,marginTop:2}}>Edita montos, reagrupa por categoría y organiza tus compromisos mensuales</div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setEditMode(m=>!m)} style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontFamily:F,border:`1px solid ${editMode?C.accent:C.border}`,background:editMode?C.accentDim:"transparent",color:editMode?C.accent:C.textDim,cursor:"pointer"}}>{editMode?"Listo":"Gestionar"}</button>
+          <button onClick={()=>setAddMode(true)} style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontFamily:F,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}}>+ Agregar</button>
+        </div>
+      </div>
+
       {/* Modal flotante — agregar gasto fijo */}
       {addMode&&(
         <div onClick={()=>setAddMode(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
@@ -2039,18 +2051,6 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
 
       {/* Lista agrupada */}
       <div style={S.card}>
-        {/* Header con botones */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:".05em"}}>gastos fijos declarados</div>
-            {items.length>0&&<><span style={{fontSize:11,color:C.muted}}>{items.length} conceptos</span>
-              <span style={{fontSize:16,fontWeight:700,color:"#D4537E"}}>{$f(total)}</span></>}
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setEditMode(m=>!m)} style={{padding:"5px 14px",borderRadius:8,fontSize:12,fontFamily:F,border:`1px solid ${editMode?C.accent:C.border}`,background:editMode?C.accentDim:"transparent",color:editMode?C.accent:C.textDim,cursor:"pointer"}}>{editMode?"Listo":"Gestionar"}</button>
-            <button onClick={()=>setAddMode(true)} style={{padding:"5px 14px",borderRadius:8,fontSize:12,fontFamily:F,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer"}}>+ Agregar</button>
-          </div>
-        </div>
         {Object.entries(grupos).map(([cat,catItems],gi)=>{
           const color=CAT_COLORS_FIJOS[cat]||"#888";
           const catTotal=catItems.reduce((s,i)=>s+Number(i.monto),0);
