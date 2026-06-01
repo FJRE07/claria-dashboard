@@ -177,7 +177,7 @@ const mapApiCard = (c) => ({
   icon: c.icono||"💳",
 });
 let _txId = 200;
-const PREV_SAVINGS_DEFAULT = 16500;
+const PREV_SAVINGS_DEFAULT = 0;
 const INIT_TX = [];
 const EXP_CATS   = ["Supermercado","Salud","Transporte","Compras","Comida","Suscripciones"];
 const EXP_COLORS = { Comida:"#FF4560", Transporte:"#3D8EF5", Salud:"#00D4A0", Compras:"#9B7BFF", Suscripciones:"#FFBA2C", Supermercado:"#22D3EE" };
@@ -1703,28 +1703,85 @@ function SeccionAhorroMSI({ dash }) {
   const [editModoMSI,    setEditModoMSI]    = useState(false);
   const [editingMeta,    setEditingMeta]    = useState(false);
   const [metaInput,      setMetaInput]      = useState("");
+  const [addModoAhorro,  setAddModoAhorro]  = useState(false);
+  const [addModoMSI,     setAddModoMSI]     = useState(false);
+  const [nuevoAhorro,    setNuevoAhorro]    = useState({desc:"",amt:""});
+  const [nuevoMSI,       setNuevoMSI]       = useState({descripcion:"",cuota_mensual:"",total_pagos:"",pagos_hechos:"0"});
   const [localAhorros,   setLocalAhorros]   = useState(dash?.ahorrosTxs||[]);
+  const [localPlanes,    setLocalPlanes]    = useState(()=>(dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0));
   const [metaAnual,      setMetaAnual]      = useState(()=>{
     const mo = (dash?.ahorroMensual||AHORRO_MENSUAL);
     return mo * (11 - new Date().getMonth());
   });
 
-  const acumulado     = dash?.acumulado ?? 0;
+  const acumulado     = localAhorros.reduce((s,m)=>s+m.amt, 0);
   const libre         = Number(dash?.libre||0);
   const ahorroMensual = dash?.ahorroMensual || AHORRO_MENSUAL;
-  const saldoMSI      = dash?.msiActivos?.filter(m=>Number(m.pagos_restantes)>0)
-                             .reduce((s,m)=>s+Number(m.saldo_pendiente),0)||0;
-  const mesesAFin     = 11 - new Date().getMonth(); // Jun→Dic = 7 para May
+  const saldoMSI      = localPlanes.reduce((s,m)=>s+Number(m.saldo_pendiente),0);
+  const mesesAFin     = 11 - new Date().getMonth();
   const pctMeta       = metaAnual>0?Math.round(Math.min(acumulado/metaAnual*100,100)):0;
   const posicionNeta  = acumulado-saldoMSI;
   const COLORS_MSI    = ["#185FA5","#D85A30","#1D9E75","#7F77DD","#BA7517"];
-  const planesActivos = (dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0);
-  const cuotasMSI     = dash?.cuotasMSI||0;
+  const cuotasMSI     = localPlanes.reduce((s,m)=>s+Number(m.cuota_mensual),0);
   const totLimCard    = dash?.totLim||0;
   const totUsedCard   = dash?.totUsed||0;
   const utilPct       = totLimCard>0?Math.round(totUsedCard/totLimCard*100):0;
 
+  const inpS = {width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.text,outline:"none"};
+  const agregarAhorro = ()=>{
+    if(!nuevoAhorro.desc||!nuevoAhorro.amt)return;
+    setLocalAhorros(p=>[...p,{id:Date.now(),desc:nuevoAhorro.desc,amt:Number(nuevoAhorro.amt)||0,date:new Date().toISOString().slice(0,10)}]);
+    setNuevoAhorro({desc:"",amt:""}); setAddModoAhorro(false);
+  };
+  const agregarMSI = ()=>{
+    if(!nuevoMSI.descripcion||!nuevoMSI.cuota_mensual||!nuevoMSI.total_pagos)return;
+    const total=Number(nuevoMSI.total_pagos), pagados=Number(nuevoMSI.pagos_hechos)||0;
+    setLocalPlanes(p=>[...p,{id:Date.now(),descripcion:nuevoMSI.descripcion,cuota_mensual:Number(nuevoMSI.cuota_mensual),total_pagos:total,pagos_hechos:pagados,pagos_restantes:total-pagados,saldo_pendiente:Number(nuevoMSI.cuota_mensual)*(total-pagados),proxima_cuota:null}]);
+    setNuevoMSI({descripcion:"",cuota_mensual:"",total_pagos:"",pagos_hechos:"0"}); setAddModoMSI(false);
+  };
+
   return (
+    <>
+    {/* Modal agregar ahorro */}
+    {addModoAhorro&&<div onClick={()=>setAddModoAhorro(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:380,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"24px 28px",animation:"slideUp .2s ease"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{fontSize:15,fontWeight:600,color:C.text}}>Agregar ahorro</div>
+          <button onClick={()=>setAddModoAhorro(false)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+          <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Descripción</div><input style={inpS} placeholder="ej. Depósito departamento" value={nuevoAhorro.desc} onChange={e=>setNuevoAhorro(p=>({...p,desc:e.target.value}))}/></div>
+          <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Monto</div><input style={{...inpS,textAlign:"right"}} placeholder="$0" value={nuevoAhorro.amt} onChange={e=>setNuevoAhorro(p=>({...p,amt:e.target.value.replace(/[^0-9.]/g,"")}))} onKeyDown={e=>e.key==="Enter"&&agregarAhorro()}/></div>
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button onClick={()=>setAddModoAhorro(false)} style={{padding:"7px 16px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,cursor:"pointer",fontSize:12}}>Cancelar</button>
+          <button onClick={agregarAhorro} style={{padding:"7px 16px",borderRadius:8,border:"none",background:"#1D9E75",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:500}}>Agregar</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* Modal agregar MSI */}
+    {addModoMSI&&<div onClick={()=>setAddModoMSI(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:400,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"24px 28px",animation:"slideUp .2s ease"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div style={{fontSize:15,fontWeight:600,color:C.text}}>Agregar plan MSI</div>
+          <button onClick={()=>setAddModoMSI(false)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+          {[["Descripción","descripcion","ej. iPhone 16 Pro"],["Cuota mensual","cuota_mensual","$0"],["Total de pagos","total_pagos","12"],["Pagos realizados","pagos_hechos","0"]].map(([l,k,ph])=>(
+            <div key={k}><div style={{fontSize:11,color:C.muted,marginBottom:4}}>{l}</div>
+              <input style={{...inpS,textAlign:k!=="descripcion"?"right":"left"}} placeholder={ph} value={nuevoMSI[k]}
+                onChange={e=>setNuevoMSI(p=>({...p,[k]:k==="descripcion"?e.target.value:e.target.value.replace(/[^0-9.]/g,"")}))}
+                onKeyDown={e=>e.key==="Enter"&&agregarMSI()}/></div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button onClick={()=>setAddModoMSI(false)} style={{padding:"7px 16px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,cursor:"pointer",fontSize:12}}>Cancelar</button>
+          <button onClick={agregarMSI} style={{padding:"7px 16px",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:500}}>Agregar</button>
+        </div>
+      </div>
+    </div>}
+
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
 
       {/* ── AHORRO ── */}
@@ -1733,6 +1790,7 @@ function SeccionAhorroMSI({ dash }) {
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
           <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em" }}>resumen de ahorros</div>
           <div style={{ display:"flex", gap:6 }}>
+            <button onClick={()=>setAddModoAhorro(true)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:"none", background:"#1D9E75", color:"#fff", cursor:"pointer", fontWeight:500 }}>+ Agregar</button>
             <button onClick={()=>setEditModoAhorro(m=>!m)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:`1px solid ${editModoAhorro?C.accent:C.border}`, background:editModoAhorro?C.accentDim:"transparent", color:editModoAhorro?C.accent:C.textDim, cursor:"pointer" }}>{editModoAhorro?"Listo":"Gestionar"}</button>
           </div>
         </div>
@@ -1824,7 +1882,10 @@ function SeccionAhorroMSI({ dash }) {
       <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
           <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em" }}>distribución de crédito</div>
-          <button onClick={()=>setEditModoMSI(m=>!m)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:`1px solid ${editModoMSI?C.accent:C.border}`, background:editModoMSI?C.accentDim:"transparent", color:editModoMSI?C.accent:C.textDim, cursor:"pointer" }}>{editModoMSI?"Listo":"Gestionar"}</button>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={()=>setAddModoMSI(true)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:"none", background:"#185FA5", color:"#fff", cursor:"pointer", fontWeight:500 }}>+ Agregar</button>
+            <button onClick={()=>setEditModoMSI(m=>!m)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:`1px solid ${editModoMSI?C.accent:C.border}`, background:editModoMSI?C.accentDim:"transparent", color:editModoMSI?C.accent:C.textDim, cursor:"pointer" }}>{editModoMSI?"Listo":"Gestionar"}</button>
+          </div>
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
           <div>
@@ -1858,14 +1919,14 @@ function SeccionAhorroMSI({ dash }) {
           ))}
         </div>
         <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:8 }}>planes activos</div>
-        {planesActivos.length===0
+        {localPlanes.length===0
           ? <div style={{ fontSize:12, color:C.muted }}>Sin planes MSI activos</div>
-          : planesActivos.map((m,idx)=>{
+          : localPlanes.map((m,idx)=>{
               const color=COLORS_MSI[idx%COLORS_MSI.length];
               const pagados=Number(m.pagos_hechos), total=Number(m.total_pagos), restantes=Number(m.pagos_restantes);
               return (
                 <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"8px 0", borderBottom:`0.5px solid ${C.border}` }}>
-                  {editModoMSI&&<button onClick={()=>{ /* TODO: delete MSI plan */ }} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer", flexShrink:0, marginRight:8, alignSelf:"center" }}>✕</button>}
+                  {editModoMSI&&<button onClick={()=>setLocalPlanes(p=>p.filter(x=>x.id!==m.id))} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer", flexShrink:0, marginRight:8, alignSelf:"center" }}>✕</button>}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:600, marginBottom:4, color:C.text }}>{m.descripcion}</div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginBottom:3 }}>
@@ -1894,12 +1955,13 @@ function SeccionAhorroMSI({ dash }) {
           <div style={{ fontSize:11, color:C.muted }}>cuota total · saldo total</div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:15, fontWeight:600, color:"#D85A30" }}>${cuotasMSI.toLocaleString("es-MX")}/mes</div>
-            <div style={{ fontSize:11, color:C.muted }}>${saldoMSI.toLocaleString("es-MX")} en {planesActivos.length} planes</div>
+            <div style={{ fontSize:11, color:C.muted }}>${saldoMSI.toLocaleString("es-MX")} en {localPlanes.length} planes</div>
           </div>
         </div>
       </div>
 
     </div>
+    </>
   );
 }
 
