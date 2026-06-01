@@ -1860,7 +1860,7 @@ function SeccionAhorroMSI({ dash }) {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:`0.5px solid ${C.border}` }}>
             <div>
               <div style={{ fontSize:12, fontWeight:500, color:C.text }}>Deuda MSI activa</div>
-              <div style={{ fontSize:11, color:C.muted }}>{planesActivos.length} planes activos</div>
+              <div style={{ fontSize:11, color:C.muted }}>{localPlanes.length} planes activos</div>
             </div>
             <div style={{ fontSize:13, fontWeight:600, color:"#E24B4A" }}>−${saldoMSI.toLocaleString("es-MX")}</div>
           </div>
@@ -1910,7 +1910,7 @@ function SeccionAhorroMSI({ dash }) {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:C.border, borderRadius:8, overflow:"hidden", marginBottom:14 }}>
           {[
             { label:"cuota mensual",  val:`$${cuotasMSI.toLocaleString("es-MX")}`, color:"#D85A30" },
-            { label:"planes activos", val:`${planesActivos.length} planes`,         color:"#378ADD" },
+            { label:"planes activos", val:`${localPlanes.length} planes`,         color:"#378ADD" },
           ].map(k=>(
             <div key={k.label} style={{ background:C.bg2, padding:"8px 12px" }}>
               <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:2 }}>{k.label}</div>
