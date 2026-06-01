@@ -2362,7 +2362,8 @@ function Dashboard({ logout }) {
     <div style={{ display:"flex", height:"100vh", background:C.bg, fontFamily:F, overflow:"hidden" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0}body{background:${C.bg}}
+        *{box-sizing:border-box;margin:0;padding:0;font-family:'IBM Plex Sans',system-ui,sans-serif}body{background:${C.bg}}
+        button,input,select,textarea{font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:inherit}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${C.border};border-radius:2px}
         select option{background:${C.card};color:${C.text}}input[type=date]{color-scheme:dark}
         @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
