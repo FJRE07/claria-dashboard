@@ -734,7 +734,7 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
         <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
           {editMode&&<button onClick={()=>{ if(confirm(`¿Eliminar las ${list.length} transacciones visibles?`)){list.forEach(t=>{setLocalTxs(p=>p.filter(x=>x.id!==t.id));setTxs(p=>p.filter(x=>x.id!==t.id));API.deleteGasto(t.id).catch(console.error);});} }} style={{ ...BtnP, background:C.red, padding:"6px 14px", fontSize:12 }}>Eliminar todas</button>}
           <button onClick={()=>setEditMode(m=>!m)} style={{ padding:"6px 14px", borderRadius:8, fontSize:12, fontFamily:F, border:`1px solid ${editMode?C.accent:C.border}`, background:editMode?C.accentDim:"transparent", color:editMode?C.accent:C.textDim, cursor:"pointer" }}>{editMode?"Listo":"Gestionar"}</button>
-          <button onClick={()=>setAddingTx(true)} style={{ ...BtnP, padding:"6px 16px", fontSize:12 }}>+ Añadir</button>
+          <button onClick={()=>setAddingTx(true)} style={{ padding:"6px 14px", borderRadius:8, fontSize:12, fontWeight:500, border:"none", background:"#185FA5", color:"#fff", cursor:"pointer" }}>+ Agregar</button>
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"44px 34px 1fr 78px 110px 96px 140px 72px 76px", padding:"5px 14px", marginBottom:5, fontFamily:F, fontSize:10, color:C.textMuted, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em" }}>
@@ -1085,7 +1085,7 @@ function MSIPlans({ plans, cards }) {
 }
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
-function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards }) {
+function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards, onDeleteMsi }) {
   const [savingsGoalPct, setSavingsGoalPct] = useState(20);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState("20");
@@ -1173,6 +1173,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     totUsed,
     ahorroMensual: thisMoSavings > 0 ? thisMoSavings : AHORRO_MENSUAL,
     ahorrosTxs: txs.filter(t=>t.cat==="Ahorro").map(t=>({ id:t.id, desc:t.desc, amt:Math.abs(t.amt), date:t.date })),
+    onDeleteMsi,
   };
 
   return (
@@ -1926,7 +1927,7 @@ function SeccionAhorroMSI({ dash }) {
               const pagados=Number(m.pagos_hechos), total=Number(m.total_pagos), restantes=Number(m.pagos_restantes);
               return (
                 <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"8px 0", borderBottom:`0.5px solid ${C.border}` }}>
-                  {editModoMSI&&<button onClick={()=>setLocalPlanes(p=>p.filter(x=>x.id!==m.id))} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer", flexShrink:0, marginRight:8, alignSelf:"center" }}>✕</button>}
+                  {editModoMSI&&<button onClick={()=>{ setLocalPlanes(p=>p.filter(x=>x.id!==m.id)); dash?.onDeleteMsi?.(m.id); }} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer", flexShrink:0, marginRight:8, alignSelf:"center" }}>✕</button>}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12, fontWeight:600, marginBottom:4, color:C.text }}>{m.descripcion}</div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginBottom:3 }}>
@@ -2004,6 +2005,7 @@ const CAT_COLORS_FIJOS = {
 
 function TabFijos({ fijosData=[], onSave, onDelete }) {
   const [items,    setItems]    = useState(fijosData);
+  useEffect(()=>{ setItems(fijosData); }, [JSON.stringify(fijosData)]);
   const [editId,   setEditId]   = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [addMode,  setAddMode]  = useState(false);
@@ -2239,7 +2241,7 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
     catCard: (color,first)=>({borderRadius:8,padding:"8px 10px",border:`0.5px solid ${color}${first?"44":"22"}`,background:color+(first?"18":"0e"),position:"relative",cursor:"grab"}),
     input:   (color)=>({width:"100%",background:"transparent",border:"none",fontSize:15,fontWeight:600,outline:"none",padding:0,color,cursor:"text"}),
     addBtn:  (color)=>({marginTop:4,padding:"6px 8px",borderRadius:6,border:`0.5px dashed ${color}44`,fontSize:11,color:color+"88",textAlign:"center",cursor:"pointer"}),
-    delBtn:  {position:"absolute",top:5,right:6,fontSize:10,color:C.muted,cursor:"pointer",background:"none",border:"none",opacity:0.7},
+    delBtn:  {position:"absolute",top:4,right:5,fontSize:11,color:"#E24B4A",cursor:"pointer",background:"#E24B4A18",border:"1px solid #E24B4A44",borderRadius:4,padding:"1px 5px",lineHeight:1.4,fontWeight:700},
     newInput:{width:"100%",background:C.card,border:`0.5px solid ${C.border}`,borderRadius:7,padding:"7px 10px",fontSize:12,color:C.text,outline:"none"},
   };
 
@@ -2471,7 +2473,8 @@ function Dashboard({ logout }) {
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textDim;}}>⏻</button>
         </header>
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px", display:"flex", flexDirection:"column", gap:0 }}>
-          {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}/>}
+          {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}
+            onDeleteMsi={(id)=>{setMsiPlans(p=>p.filter(p=>p.id!==id));API.deleteMSI(id).catch(console.error);}}/>}
           {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
             <TabFijos
               fijosData={fixedItems.map(f=>({id:f.id,detalle:f.name,categoria:f.cat,grupo:f.cat,monto:f.amt,icono:f.icon,dia_cobro:f.day}))}
