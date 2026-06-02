@@ -2062,9 +2062,9 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
       setItems(updated); setEditId(null);
     }finally{setSaving(false);}
   };
-  const handleDelete=async(id)=>{
-    if(onDelete)await onDelete(id);
+  const handleDelete=(id)=>{
     setItems(p=>p.filter(i=>i.id!==id));
+    if(onDelete) onDelete(id).catch(e=>console.error("deleteFijo:",e));
   };
 
   const S={
@@ -2405,8 +2405,8 @@ function Dashboard({ logout }) {
       if(dash.ingreso) setIncome(Number(dash.ingreso));
       setTxs((dash.ultimasTransacciones||[]).map(mapApiTx));
       if(!dash.ingreso||dash.ingreso===0) setOnboarding(true);
-      setFixedItems((fijosData.fijos||[]).map(mapApiFijo));
-      setMsiPlans((msiData.msi||[]).map(mapApiMsi));
+      setFixedItems((fijosData?.fijos||[]).map(mapApiFijo));
+      setMsiPlans((msiData?.msi||[]).map(mapApiMsi));
       if(grupos && Object.values(grupos).some(v=>v>0)) setGroupBudgets(grupos);
       if(tarjetasData?.length) setCards(tarjetasData.map(mapApiCard));
     }).catch(err=>{
@@ -2495,8 +2495,8 @@ function Dashboard({ logout }) {
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px", display:"flex", flexDirection:"column", gap:0 }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}
             onRefresh={cargarDatos}
-            onDeleteMsi={async(id)=>{ try{await API.deleteMSI(id); setMsiPlans(prev=>prev.filter(p=>p.id!==id));}catch(e){console.error("deleteMSI:",e);} }}
-            onDeleteAhorro={async(id)=>{ try{await API.deleteGasto(id); setTxs(prev=>prev.filter(t=>t.id!==id));}catch(e){console.error("deleteAhorro:",e);} }}/>}
+            onDeleteMsi={async(id)=>{ console.log("[deleteMSI] id=",id); try{await API.deleteMSI(id); setMsiPlans(prev=>prev.filter(p=>p.id!==id));}catch(e){console.error("[deleteMSI] ERROR:",e); setApiError("Error eliminando MSI: "+e.message);} }}
+            onDeleteAhorro={async(id)=>{ console.log("[deleteAhorro] id=",id); try{await API.deleteGasto(id); setTxs(prev=>prev.filter(t=>t.id!==id));}catch(e){console.error("[deleteAhorro] ERROR:",e); setApiError("Error eliminando ahorro: "+e.message);} }}/>}
           {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
             <TabFijos
               onRefresh={cargarDatos}
@@ -2507,7 +2507,7 @@ function Dashboard({ logout }) {
                 if(existing){const u=await API.putFijo(item.id,payload);if(u)setFixedItems(p=>p.map(f=>f.id===item.id?mapApiFijo(u,0):f));}
                 else{const c=await API.postFijo(payload);if(c)setFixedItems(p=>[...p,mapApiFijo(c,p.length)]);}
               }}
-              onDelete={async(id)=>{ await API.deleteFijo(id); setFixedItems(p=>p.filter(f=>f.id!==id)); }}
+              onDelete={async(id)=>{ console.log("[deleteFijo] id=",id); try{ await API.deleteFijo(id); setFixedItems(p=>p.filter(f=>f.id!==id)); }catch(e){console.error("[deleteFijo] ERROR:",e); setApiError("Error eliminando gasto fijo: "+e.message);} }}
             /></>}
           {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} setMsiPlans={setMsiPlans} onImportDone={cargarDatos}/>}
           {tab==="budget"       &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>

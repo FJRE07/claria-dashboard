@@ -3,7 +3,7 @@ const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const getToken = () => localStorage.getItem("claria_token");
 
 async function req(method, path, body) {
-  const opts = { method, headers: {} };
+  const opts = { method, headers: {}, cache: "no-store" };
   const token = getToken();
   if (token) opts.headers["Authorization"] = `Bearer ${token}`;
   if (body) {
