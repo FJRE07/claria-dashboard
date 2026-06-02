@@ -106,16 +106,19 @@ const DASH_TO_API_CAT = {
 };
 
 // ── API data mappers ──────────────────────────────────────────────────────────
-const mapApiTx = (t) => ({
-  id: t.id,
-  date: String(t.fecha_operacion ?? "").slice(0, 10),
-  desc: t.descripcion ?? "",
-  amt: -(Math.abs(Number(t.monto_mxn ?? 0))),
-  cat: API_TO_DASH_CAT[t.categoria] ?? t.categoria ?? "Otros",
-  icon: CAT_ICONS[API_TO_DASH_CAT[t.categoria]] ?? "💸",
-  src: t.via ?? "manual",
-  cardId: t.tarjeta_id ?? null,
-});
+const mapApiTx = (t) => {
+  const cat = t.via === "ahorro" ? "Ahorro" : (API_TO_DASH_CAT[t.categoria] ?? t.categoria ?? "Otros");
+  return {
+    id: t.id,
+    date: String(t.fecha_operacion ?? "").slice(0, 10),
+    desc: t.descripcion ?? "",
+    amt: -(Math.abs(Number(t.monto_mxn ?? 0))),
+    cat,
+    icon: CAT_ICONS[cat] ?? "💸",
+    src: t.via ?? "manual",
+    cardId: t.tarjeta_id ?? null,
+  };
+};
 
 const GRUPO_ICON = {
   "Inversión":"📈", "Gimnasio":"🏋️", "Trabajo / Consulta":"💻",
@@ -1081,7 +1084,7 @@ function MSIPlans({ plans, cards }) {
 }
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
-function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards, onDeleteMsi }) {
+function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards, onDeleteMsi, onDeleteAhorro }) {
   const [savingsGoalPct, setSavingsGoalPct] = useState(20);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState("20");
@@ -1170,6 +1173,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     ahorroMensual: thisMoSavings > 0 ? thisMoSavings : AHORRO_MENSUAL,
     ahorrosTxs: txs.filter(t=>t.cat==="Ahorro").map(t=>({ id:t.id, desc:t.desc, amt:Math.abs(t.amt), date:t.date })),
     onDeleteMsi,
+    onDeleteAhorro,
   };
 
   return (
@@ -1707,6 +1711,7 @@ function SeccionAhorroMSI({ dash }) {
   const [localAhorros,   setLocalAhorros]   = useState(dash?.ahorrosTxs||[]);
   const [localPlanes,    setLocalPlanes]    = useState(()=>(dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0));
   useEffect(()=>{ setLocalPlanes((dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0)); },[JSON.stringify(dash?.msiActivos)]);
+  useEffect(()=>{ setLocalAhorros(dash?.ahorrosTxs||[]); },[JSON.stringify(dash?.ahorrosTxs)]);
   const [metaAnual,      setMetaAnual]      = useState(()=>{
     const mo = (dash?.ahorroMensual||AHORRO_MENSUAL);
     return mo * (11 - new Date().getMonth());
@@ -1733,14 +1738,14 @@ function SeccionAhorroMSI({ dash }) {
     setLocalAhorros(p=>[...p,item]);
     setNuevoAhorro({desc:"",amt:""}); setAddModoAhorro(false);
     try{
-      const r=await API.postGasto({descripcion:item.desc,monto_mxn:item.amt,categoria:"Otro",periodo:periodoActual(),via:"manual",fecha_operacion:hoy});
+      const r=await API.postGasto({descripcion:item.desc,monto_mxn:item.amt,categoria:"Otro",periodo:periodoActual(),via:"ahorro",fecha_operacion:hoy});
       if(r?.id) setLocalAhorros(p=>p.map(x=>x.id===item.id?{...x,_apiId:r.id}:x));
     }catch(e){console.error("Error guardando ahorro:",e);}
   };
-  const eliminarAhorro = async(m)=>{
+  const eliminarAhorro = (m)=>{
     setLocalAhorros(p=>p.filter(x=>x.id!==m.id));
     const apiId=m._apiId||m.id;
-    API.deleteGasto(apiId).catch(console.error);
+    dash?.onDeleteAhorro?.(apiId);
   };
   const agregarMSI = async()=>{
     if(!nuevoMSI.descripcion||!nuevoMSI.cuota_mensual||!nuevoMSI.total_pagos)return;
@@ -2025,6 +2030,8 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
   const [nuevo,    setNuevo]    = useState({ detalle:"", categoria:"", monto:"" });
   const [saving,   setSaving]   = useState(false);
 
+  useEffect(()=>{ setItems(fijosData); },[JSON.stringify(fijosData)]);
+
   const total = items.reduce((s,i)=>s+Number(i.monto),0);
   const $f    = n=>"$"+Number(n).toLocaleString("es-MX",{minimumFractionDigits:0,maximumFractionDigits:0});
 
@@ -2040,7 +2047,6 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
     try{
       const item={...nuevo,monto:Number(nuevo.monto),id:Date.now()};
       if(onSave)await onSave(item);
-      setItems(p=>[...p,item]);
       setNuevo({detalle:"",categoria:"",monto:""});
     }finally{setSaving(false);}
   };
@@ -2397,11 +2403,10 @@ function Dashboard({ logout }) {
       API.getTarjetas(),
     ]).then(([dash,fijosData,msiData,grupos,tarjetasData])=>{
       if(dash.ingreso) setIncome(Number(dash.ingreso));
-      const txsApi=dash.ultimasTransacciones||[];
-      if(txsApi.length) setTxs(txsApi.map(mapApiTx));
+      setTxs((dash.ultimasTransacciones||[]).map(mapApiTx));
       if(!dash.ingreso||dash.ingreso===0) setOnboarding(true);
-      if(fijosData.fijos?.length) setFixedItems(fijosData.fijos.map(mapApiFijo));
-      if(msiData.msi?.length)     setMsiPlans(msiData.msi.map(mapApiMsi));
+      setFixedItems((fijosData.fijos||[]).map(mapApiFijo));
+      setMsiPlans((msiData.msi||[]).map(mapApiMsi));
       if(grupos && Object.values(grupos).some(v=>v>0)) setGroupBudgets(grupos);
       if(tarjetasData?.length) setCards(tarjetasData.map(mapApiCard));
     }).catch(err=>{
@@ -2489,17 +2494,20 @@ function Dashboard({ logout }) {
         </header>
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px", display:"flex", flexDirection:"column", gap:0 }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}
-            onDeleteMsi={(id)=>{setMsiPlans(prev=>prev.filter(p=>p.id!==id));API.deleteMSI(id).catch(console.error);}}/>}
+            onRefresh={cargarDatos}
+            onDeleteMsi={async(id)=>{ try{await API.deleteMSI(id); setMsiPlans(prev=>prev.filter(p=>p.id!==id));}catch(e){console.error("deleteMSI:",e);} }}
+            onDeleteAhorro={async(id)=>{ try{await API.deleteGasto(id); setTxs(prev=>prev.filter(t=>t.id!==id));}catch(e){console.error("deleteAhorro:",e);} }}/>}
           {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
             <TabFijos
+              onRefresh={cargarDatos}
               fijosData={fixedItems.map(f=>({id:f.id,detalle:f.name,categoria:f.cat,grupo:f.cat,monto:f.amt,icono:f.icon,dia_cobro:f.day}))}
               onSave={async(item)=>{
                 const payload={detalle:item.detalle,monto:Number(item.monto),grupo:item.categoria||item.grupo||"Otro",icono:item.icono||"💡",dia_cobro:item.dia_cobro||1};
                 const existing=fixedItems.find(f=>f.id===item.id);
-                if(existing){const u=await API.putFijo(item.id,payload).catch(console.error);if(u)setFixedItems(p=>p.map(f=>f.id===item.id?mapApiFijo(u,0):f));}
-                else{const c=await API.postFijo(payload).catch(console.error);if(c)setFixedItems(p=>[...p,mapApiFijo(c,p.length)]);}
+                if(existing){const u=await API.putFijo(item.id,payload);if(u)setFixedItems(p=>p.map(f=>f.id===item.id?mapApiFijo(u,0):f));}
+                else{const c=await API.postFijo(payload);if(c)setFixedItems(p=>[...p,mapApiFijo(c,p.length)]);}
               }}
-              onDelete={async(id)=>{await API.deleteFijo(id).catch(console.error);setFixedItems(p=>p.filter(f=>f.id!==id));}}
+              onDelete={async(id)=>{ await API.deleteFijo(id); setFixedItems(p=>p.filter(f=>f.id!==id)); }}
             /></>}
           {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} setMsiPlans={setMsiPlans} onImportDone={cargarDatos}/>}
           {tab==="budget"       &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>

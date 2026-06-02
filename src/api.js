@@ -20,7 +20,9 @@ async function req(method, path, body) {
     const msg = await r.text().catch(() => "");
     throw new Error(`API ${r.status}${msg ? ": " + msg.slice(0, 120) : ""}`);
   }
-  return r.json();
+  if (r.status === 204) return null;
+  const text = await r.text().catch(() => "");
+  return text ? JSON.parse(text) : null;
 }
 
 export const login          = (email, password) => req("POST", "/auth/login", { email, password });
