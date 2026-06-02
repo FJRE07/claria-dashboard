@@ -1726,16 +1726,32 @@ function SeccionAhorroMSI({ dash }) {
   const utilPct       = totLimCard>0?Math.round(totUsedCard/totLimCard*100):0;
 
   const inpS = {width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.text,outline:"none"};
-  const agregarAhorro = ()=>{
+  const agregarAhorro = async()=>{
     if(!nuevoAhorro.desc||!nuevoAhorro.amt)return;
-    setLocalAhorros(p=>[...p,{id:Date.now(),desc:nuevoAhorro.desc,amt:Number(nuevoAhorro.amt)||0,date:new Date().toISOString().slice(0,10)}]);
+    const hoy=new Date().toISOString().slice(0,10);
+    const item={id:Date.now(),desc:nuevoAhorro.desc,amt:Number(nuevoAhorro.amt)||0,date:hoy,_apiId:null};
+    setLocalAhorros(p=>[...p,item]);
     setNuevoAhorro({desc:"",amt:""}); setAddModoAhorro(false);
+    try{
+      const r=await API.postGasto({descripcion:item.desc,monto_mxn:item.amt,categoria:"Otro",periodo:periodoActual(),via:"manual",fecha_operacion:hoy});
+      if(r?.id) setLocalAhorros(p=>p.map(x=>x.id===item.id?{...x,_apiId:r.id}:x));
+    }catch(e){console.error("Error guardando ahorro:",e);}
   };
-  const agregarMSI = ()=>{
+  const eliminarAhorro = async(m)=>{
+    setLocalAhorros(p=>p.filter(x=>x.id!==m.id));
+    const apiId=m._apiId||m.id;
+    API.deleteGasto(apiId).catch(console.error);
+  };
+  const agregarMSI = async()=>{
     if(!nuevoMSI.descripcion||!nuevoMSI.cuota_mensual||!nuevoMSI.total_pagos)return;
-    const total=Number(nuevoMSI.total_pagos), pagados=Number(nuevoMSI.pagos_hechos)||0;
-    setLocalPlanes(p=>[...p,{id:Date.now(),descripcion:nuevoMSI.descripcion,cuota_mensual:Number(nuevoMSI.cuota_mensual),total_pagos:total,pagos_hechos:pagados,pagos_restantes:total-pagados,saldo_pendiente:Number(nuevoMSI.cuota_mensual)*(total-pagados),proxima_cuota:null}]);
+    const total=Number(nuevoMSI.total_pagos), pagados=Number(nuevoMSI.pagos_hechos)||0, mo=Number(nuevoMSI.cuota_mensual);
+    const plan={id:Date.now(),descripcion:nuevoMSI.descripcion,cuota_mensual:mo,total_pagos:total,pagos_hechos:pagados,pagos_restantes:total-pagados,saldo_pendiente:mo*(total-pagados),proxima_cuota:null};
+    setLocalPlanes(p=>[...p,plan]);
     setNuevoMSI({descripcion:"",cuota_mensual:"",total_pagos:"",pagos_hechos:"0"}); setAddModoMSI(false);
+    try{
+      const r=await API.postMSI({descripcion:plan.descripcion,cuota_mensual:mo,total_pagos:total,monto_total:mo*total,fecha_inicio:new Date().toISOString().slice(0,10),pagos_hechos:pagados});
+      if(r?.id) setLocalPlanes(p=>p.map(x=>x.id===plan.id?{...x,id:r.id}:x));
+    }catch(e){console.error("Error guardando MSI:",e);}
   };
 
   return (
@@ -1849,7 +1865,7 @@ function SeccionAhorroMSI({ dash }) {
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:"#1D9E75", flexShrink:0 }}>+${m.amt.toLocaleString("es-MX",{maximumFractionDigits:0})}</div>
-                  {editModoAhorro&&<button onClick={()=>setLocalAhorros(p=>p.filter(x=>x.id!==m.id))} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer" }}>✕</button>}
+                  {editModoAhorro&&<button onClick={()=>eliminarAhorro(m)} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer" }}>✕</button>}
                 </div>
               </div>
             ))
