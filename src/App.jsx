@@ -707,11 +707,9 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
     } else { onAdd(tx); setLocalTxs(p=>[tx,...p]); }
   };
   const delTx=id=>{
-    if(confirm("¿Eliminar esta transacción?")){
-      setLocalTxs(p=>p.filter(t=>t.id!==id));
-      setTxs(p=>p.filter(t=>t.id!==id));
-      API.deleteGasto(id).catch(console.error);
-    }
+    setLocalTxs(p=>p.filter(t=>t.id!==id));
+    setTxs(p=>p.filter(t=>t.id!==id));
+    API.deleteGasto(id).catch(console.error);
   };
   const Fb=({val,cur,label,onClick})=><button onClick={onClick} style={{ padding:"5px 14px", borderRadius:99, fontSize:12, fontWeight:500, fontFamily:F, border:val===cur?"none":`1px solid ${C.border}`, background:val===cur?C.accent:"transparent", color:val===cur?C.bg:C.textDim, cursor:"pointer" }}>{label}</button>;
   const sel={ background:C.card, border:`1px solid ${C.border}`, color:C.text, borderRadius:8, padding:"5px 10px", fontSize:12, fontFamily:F, cursor:"pointer", outline:"none" };
@@ -732,7 +730,7 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
         <span style={{ color:C.textMuted, fontSize:11, fontFamily:F }}>—</span>
         <input type="date" value={to} onChange={e=>setTo(e.target.value)} style={sel}/>
         <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
-          {editMode&&<button onClick={()=>{ if(confirm(`¿Eliminar las ${list.length} transacciones visibles?`)){list.forEach(t=>{setLocalTxs(p=>p.filter(x=>x.id!==t.id));setTxs(p=>p.filter(x=>x.id!==t.id));API.deleteGasto(t.id).catch(console.error);});} }} style={{ ...BtnP, background:C.red, padding:"6px 14px", fontSize:12 }}>Eliminar todas</button>}
+          {editMode&&<button onClick={()=>{ list.forEach(t=>{setLocalTxs(p=>p.filter(x=>x.id!==t.id));setTxs(p=>p.filter(x=>x.id!==t.id));API.deleteGasto(t.id).catch(console.error);}); }} style={{ ...BtnP, background:C.red, padding:"6px 14px", fontSize:12 }}>Eliminar todas</button>}
           <button onClick={()=>setEditMode(m=>!m)} style={{ padding:"6px 14px", borderRadius:8, fontSize:12, fontFamily:F, border:`1px solid ${editMode?C.accent:C.border}`, background:editMode?C.accentDim:"transparent", color:editMode?C.accent:C.textDim, cursor:"pointer" }}>{editMode?"Listo":"Gestionar"}</button>
           <button onClick={()=>setAddingTx(true)} style={{ padding:"6px 14px", borderRadius:8, fontSize:12, fontWeight:500, border:"none", background:"#185FA5", color:"#fff", cursor:"pointer" }}>+ Agregar</button>
         </div>
@@ -811,7 +809,6 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
   };
 
   const deleteCard=async(id)=>{
-    if(!confirm("¿Eliminar esta tarjeta? Se eliminarán sus planes MSI asociados."))return;
     try{
       await API.deleteTarjeta(id);
       setCards(prev=>prev.filter(c=>c.id!==id));
@@ -943,7 +940,6 @@ function FixedExpenses({ items, setItems, income }) {
     }
   };
   const delItem=async(id)=>{
-    if(!confirm("¿Eliminar este gasto fijo?"))return;
     await API.deleteFijo(id).catch(console.error);
     setItems(p=>p.filter(i=>i.id!==id));
   };
@@ -1710,6 +1706,7 @@ function SeccionAhorroMSI({ dash }) {
   const [nuevoMSI,       setNuevoMSI]       = useState({descripcion:"",cuota_mensual:"",total_pagos:"",pagos_hechos:"0"});
   const [localAhorros,   setLocalAhorros]   = useState(dash?.ahorrosTxs||[]);
   const [localPlanes,    setLocalPlanes]    = useState(()=>(dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0));
+  useEffect(()=>{ setLocalPlanes((dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0)); },[JSON.stringify(dash?.msiActivos)]);
   const [metaAnual,      setMetaAnual]      = useState(()=>{
     const mo = (dash?.ahorroMensual||AHORRO_MENSUAL);
     return mo * (11 - new Date().getMonth());
@@ -2005,7 +2002,6 @@ const CAT_COLORS_FIJOS = {
 
 function TabFijos({ fijosData=[], onSave, onDelete }) {
   const [items,    setItems]    = useState(fijosData);
-  useEffect(()=>{ setItems(fijosData); }, [JSON.stringify(fijosData)]);
   const [editId,   setEditId]   = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [addMode,  setAddMode]  = useState(false);
@@ -2045,7 +2041,6 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
     }finally{setSaving(false);}
   };
   const handleDelete=async(id)=>{
-    if(!window.confirm("¿Eliminar este gasto fijo?"))return;
     if(onDelete)await onDelete(id);
     setItems(p=>p.filter(i=>i.id!==id));
   };
@@ -2206,7 +2201,10 @@ const CATS_DEFAULT = [
 ];
 
 function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
-  const [cats,     setCats]     = useState(presupuestoData.length>0 ? presupuestoData.map((p,i)=>({id:i+1,nombre:p.categoria,sub:"",prioridad:"Flexible",monto:Number(p.monto)})) : CATS_DEFAULT);
+  const [cats,     setCats]     = useState(()=>{
+    try{const s=localStorage.getItem("claria_ppto_cats");if(s)return JSON.parse(s);}catch{}
+    return presupuestoData.length>0?presupuestoData.map((p,i)=>({id:i+1,nombre:p.categoria,sub:"",prioridad:"Flexible",monto:Number(p.monto)})):CATS_DEFAULT;
+  });
   const [editId,   setEditId]   = useState(null);
   const [editMonto,setMonto]    = useState("");
   const [drag,     setDrag]     = useState(null);
@@ -2225,7 +2223,7 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
   const handleMonto  = (id,val)=>{ const num=Number(val.replace(/[^0-9.]/g,""))||0; setCats(prev=>prev.map(c=>c.id===id?{...c,monto:num}:c)); };
   const handleAgregar= ()=>{ if(!nuevo.nombre||!nuevo.monto)return; setCats(prev=>[...prev,{id:Date.now(),...nuevo,monto:Number(String(nuevo.monto).replace(/[^0-9.]/g,""))}]); setNuevo({nombre:"",sub:"",prioridad:"Flexible",monto:""}); };
   const handleDelete = id=>setCats(prev=>prev.filter(c=>c.id!==id));
-  const handleGuardar= async()=>{ setSaving(true); try{if(onSave)await onSave(cats);}finally{setSaving(false);} };
+  const handleGuardar= async()=>{ setSaving(true); try{ localStorage.setItem("claria_ppto_cats",JSON.stringify(cats)); if(onSave)await onSave(cats);}finally{setSaving(false);} };
 
   const segs    = PRIORIDADES.map(p=>({...p, pctBarra:ingreso>0?Math.round(totalPor(p.key)/ingreso*100):0}));
   const pctLibre= ingreso>0?Math.round(sinAsignar/ingreso*100):0;
@@ -2358,7 +2356,8 @@ export default function App() {
 }
 
 function Dashboard({ logout }) {
-  const [tab,setTab]=useState("estado");
+  const [tab,setTab]=useState(()=>localStorage.getItem("claria_tab")||"estado");
+  useEffect(()=>{ localStorage.setItem("claria_tab",tab); },[tab]);
   const [txs,setTxs]=useState(INIT_TX);
   const [cards,setCards]=useState([]);
   const [sidebarOpen,setSidebar]=useState(true);
@@ -2474,7 +2473,7 @@ function Dashboard({ logout }) {
         </header>
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px", display:"flex", flexDirection:"column", gap:0 }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}
-            onDeleteMsi={(id)=>{setMsiPlans(p=>p.filter(p=>p.id!==id));API.deleteMSI(id).catch(console.error);}}/>}
+            onDeleteMsi={(id)=>{setMsiPlans(prev=>prev.filter(p=>p.id!==id));API.deleteMSI(id).catch(console.error);}}/>}
           {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
             <TabFijos
               fijosData={fixedItems.map(f=>({id:f.id,detalle:f.name,categoria:f.cat,grupo:f.cat,monto:f.amt,icono:f.icon,dia_cobro:f.day}))}
