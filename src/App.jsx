@@ -2709,8 +2709,9 @@ function Dashboard({ logout }) {
       setProcesos(prev => prev.map(p => p.id === proc.id ? { ...p, estado: "procesando" } : p));
       try {
         const b64 = await pdfABase64(archivos[i]);
-        const datos = await API.parsearEstado(b64);
-        const tarjeta_existente = cards.find(c => datos.last4 && c.last4 === datos.last4) ?? null;
+        const res = await API.parsearEstado(b64);
+        const datos = res.datos;
+        const tarjeta_existente = res.tarjeta_existente ?? null;
         setProcesos(prev => prev.map(p => p.id === proc.id ? { ...p, estado: "listo", datos, tarjeta_existente } : p));
       } catch (e) {
         setProcesos(prev => prev.map(p => p.id === proc.id ? { ...p, estado: "error", error: e.message } : p));
