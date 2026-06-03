@@ -770,7 +770,7 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
                     </div>
                     <div style={{ textAlign:"center" }}><span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":C.blueDim, color:tx.src==="whatsapp"?C.wa:C.blue }}>{tx.src==="whatsapp"?"WA":"Man"}</span></div>
                     <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
-                      {editMode&&<><button onClick={()=>setEditTx(tx)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>✏️</button>
+                      {editMode&&<><button onClick={()=>setEditTx(tx)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>✎</button>
                       <button onClick={()=>delTx(tx.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.red+"88", cursor:"pointer", padding:"3px 7px", fontSize:11 }}>🗑</button></>}
                     </div>
                   </div>
@@ -1030,7 +1030,22 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
                       <div style={{ textAlign:"right" }}><div style={{ color:"rgba(255,255,255,0.45)", fontSize:10, fontFamily:F, textTransform:"uppercase" }}>Límite</div><div style={{ color:"rgba(255,255,255,0.75)", fontSize:16, fontFamily:F }}>{c.lim>0?fmt(c.lim):"—"}</div></div>
                     </div>
                   </div>
-                  <div style={{ background:C.card, padding:"16px 28px 18px" }}>
+                  <div style={{ background:C.card, padding:"12px 28px 18px" }}>
+                    {/* Acciones discretas arriba */}
+                    <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:10 }}>
+                      <button onClick={()=>setEditCard(c)}
+                        style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textMuted, fontSize:11, fontFamily:F, padding:"2px 6px", borderRadius:5 }}
+                        onMouseEnter={e=>e.currentTarget.style.color=C.accent}
+                        onMouseLeave={e=>e.currentTarget.style.color=C.textMuted}>
+                        Editar
+                      </button>
+                      <button onClick={()=>deleteCard(c.id)}
+                        style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textMuted, fontSize:11, fontFamily:F, padding:"2px 6px", borderRadius:5 }}
+                        onMouseEnter={e=>e.currentTarget.style.color=C.red}
+                        onMouseLeave={e=>e.currentTarget.style.color=C.textMuted}>
+                        Eliminar
+                      </button>
+                    </div>
                     {c.lim>0&&<>
                       <ProgressBar value={c.used} max={c.lim} h={7}/>
                       <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
@@ -1049,10 +1064,6 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
                     </div>
                     <div style={{ display:"flex", gap:8, marginTop:12 }}>
                       <button onClick={()=>setImportandoEstado(true)} style={{ flex:1, ...BtnP, fontSize:12, padding:"6px 0", background:C.blue }}>↑ Importar estado PDF</button>
-                    </div>
-                    <div style={{ display:"flex", gap:8, marginTop:8 }}>
-                      <button onClick={()=>setEditCard(c)} style={{ flex:1, ...BtnS, fontSize:12, padding:"6px 0" }}>✏️ Editar</button>
-                      <button onClick={()=>deleteCard(c.id)} style={{ ...BtnS, fontSize:12, padding:"6px 12px", color:C.red, borderColor:C.red+"55" }}>🗑</button>
                     </div>
                   </div>
                 </div>
@@ -1203,7 +1214,7 @@ function FixedExpenses({ items, setItems, income }) {
                   <div style={{ display:"flex", alignItems:"center", gap:14 }}>
                     <span style={{ color:C.textDim, fontSize:12 }}>Día {item.day}</span>
                     <span style={{ color:itemCol, fontWeight:700, fontSize:14 }}>{fmt(item.amt)}</span>
-                    <button onClick={()=>setEditItem(item)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 8px", fontSize:12 }}>✏️</button>
+                    <button onClick={()=>setEditItem(item)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 8px", fontSize:12 }}>✎</button>
                     <button onClick={()=>delItem(item.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 8px", fontSize:12 }}>🗑</button>
                   </div>
                 </div>
@@ -1369,11 +1380,12 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
       {/* ── 1. KPI BAR ───────────────────────────────────────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
         {/* Ingreso — editable */}
-        <div style={{ background:C.card, border:`1px solid ${editingIncome?C.accent:C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6, cursor:onSaveIncome&&!editingIncome?"pointer":"default", transition:"border-color .15s" }}
+        <div style={{ background:C.card, border:`1px solid ${editingIncome?C.accent:C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6, cursor:onSaveIncome&&!editingIncome?"pointer":"default", transition:"border-color .2s" }}
           onClick={()=>{ if(onSaveIncome&&!editingIncome){ setIncomeInput(String(income)); setEditingIncome(true); } }}
-          title={onSaveIncome&&!editingIncome?"Editar ingreso mensual":undefined}>
-          <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", display:"flex", alignItems:"center", gap:6 }}>
-            Ingreso mensual {onSaveIncome&&!editingIncome&&<span style={{ color:C.accent, fontSize:10 }}>✏️</span>}
+          onMouseEnter={e=>{ if(onSaveIncome&&!editingIncome) e.currentTarget.style.borderColor=C.accent; }}
+          onMouseLeave={e=>{ if(!editingIncome) e.currentTarget.style.borderColor=C.border; }}>
+          <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>
+            Ingreso mensual
           </span>
           {editingIncome
             ? <div style={{ display:"flex", alignItems:"center", gap:6 }} onClick={e=>e.stopPropagation()}>
@@ -1972,8 +1984,78 @@ function SeccionAhorroMSI({ dash }) {
     }catch(e){console.error("Error guardando MSI:",e);}
   };
 
+  const [editandoMSI, setEditandoMSI] = useState(null); // plan completo en edición
+  const [editMSIForm, setEditMSIForm] = useState({});
+  const abrirEditMSI = (plan)=>{
+    setEditandoMSI(plan);
+    setEditMSIForm({
+      descripcion:   plan.descripcion||"",
+      monto_total:   String(plan.monto_total||""),
+      total_pagos:   String(plan.total_pagos||""),
+      pagos_hechos:  String(plan.pagos_hechos||"0"),
+      cuota_mensual: String(plan.cuota_mensual||""),
+      fecha_inicio:  String(plan.fecha_inicio||"").slice(0,10),
+      activo:        plan.activo!==false,
+    });
+  };
+  const guardarEditMSI = async()=>{
+    if(!editandoMSI)return;
+    const total=Number(editMSIForm.total_pagos)||editandoMSI.total_pagos;
+    const monto=Number(editMSIForm.monto_total)||editandoMSI.monto_total;
+    const pagados=Number(editMSIForm.pagos_hechos)||0;
+    const mo=Number(editMSIForm.cuota_mensual)||(monto>0&&total>0?Math.round(monto/total):0);
+    const payload={
+      descripcion:   editMSIForm.descripcion,
+      monto_total:   monto,
+      total_pagos:   total,
+      pagos_hechos:  pagados,
+      cuota_mensual: mo,
+      fecha_inicio:  editMSIForm.fecha_inicio||null,
+      activo:        editMSIForm.activo,
+    };
+    setLocalPlanes(p=>p.map(x=>x.id===editandoMSI.id?{...x,...payload,pagos_restantes:total-pagados,saldo_pendiente:mo*(total-pagados)}:x));
+    setEditandoMSI(null);
+    try{ await API.putMSI(editandoMSI.id, payload); }
+    catch(e){ console.error("Error actualizando MSI:",e); }
+  };
+
   return (
     <>
+    {/* Modal editar MSI */}
+    {editandoMSI&&<div onClick={()=>setEditandoMSI(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:440,background:C.surface,border:`1px solid ${C.border}`,borderRadius:18,padding:"24px 28px",animation:"slideUp .2s ease"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+          <div style={{fontSize:15,fontWeight:600,color:C.text}}>Editar plan MSI</div>
+          <button onClick={()=>setEditandoMSI(null)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+          {[
+            ["descripcion","Descripción","1/-1","text","ej. MACSTORE Gran T Coapa"],
+            ["monto_total","Monto total","auto","number","50000"],
+            ["total_pagos","Total meses","auto","number","12"],
+            ["pagos_hechos","Pagos hechos","auto","number","5"],
+            ["cuota_mensual","Cuota/mes","auto","number","4167"],
+            ["fecha_inicio","Fecha inicio","auto","date",""],
+          ].map(([k,lbl,col,type,ph])=>(
+            <div key={k} style={{gridColumn:col}}>
+              <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{lbl}</div>
+              <input type={type} placeholder={ph} value={editMSIForm[k]||""} onChange={e=>setEditMSIForm(p=>({...p,[k]:e.target.value}))}
+                style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:13,color:C.text,outline:"none",fontFamily:F}}/>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none"}}>
+            <input type="checkbox" checked={!!editMSIForm.activo} onChange={e=>setEditMSIForm(p=>({...p,activo:e.target.checked}))} style={{width:14,height:14}}/>
+            <span style={{fontSize:12,color:C.textDim}}>Plan activo</span>
+          </label>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={()=>setEditandoMSI(null)} style={{padding:"7px 16px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,cursor:"pointer",fontSize:12}}>Cancelar</button>
+          <button onClick={guardarEditMSI} style={{padding:"7px 16px",borderRadius:8,border:"none",background:C.accent,color:C.bg,cursor:"pointer",fontSize:12,fontWeight:600}}>Guardar</button>
+        </div>
+      </div>
+    </div>}
     {/* Modal agregar ahorro */}
     {addModoAhorro&&<div onClick={()=>setAddModoAhorro(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{width:380,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"24px 28px",animation:"slideUp .2s ease"}}>
@@ -2073,7 +2155,7 @@ function SeccionAhorroMSI({ dash }) {
                 </div>
               : <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
                   <div style={{ fontSize:15, fontWeight:600, color:"#1D9E75" }}>${metaAnual.toLocaleString("es-MX")} meta</div>
-                  <button onClick={()=>{setMetaInput(String(metaAnual));setEditingMeta(true);}} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:5, color:C.muted, padding:"2px 6px", fontSize:10, cursor:"pointer" }}>✏️</button>
+                  <button onClick={()=>{setMetaInput(String(metaAnual));setEditingMeta(true);}} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:5, color:C.muted, padding:"2px 6px", fontSize:10, cursor:"pointer" }}>✎</button>
                 </div>
             }
           </div>
@@ -2187,7 +2269,12 @@ function SeccionAhorroMSI({ dash }) {
                 <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"8px 0", borderBottom:`0.5px solid ${C.border}` }}>
                   {editModoMSI&&<button onClick={()=>{ setLocalPlanes(p=>p.filter(x=>x.id!==m.id)); dash?.onDeleteMsi?.(m.id); }} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer", flexShrink:0, marginRight:8, alignSelf:"center" }}>✕</button>}
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:12, fontWeight:600, marginBottom:4, color:C.text }}>{m.descripcion}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                      <span style={{ fontSize:12, fontWeight:600, color:C.text }}>{m.descripcion}</span>
+                      <button onClick={()=>abrirEditMSI(m)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, fontSize:10, padding:"0 4px", borderRadius:4 }}
+                        onMouseEnter={e=>e.currentTarget.style.color=C.accent}
+                        onMouseLeave={e=>e.currentTarget.style.color=C.textMuted}>Editar</button>
+                    </div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginBottom:3 }}>
                       {Array.from({length:total}).map((_,i)=>(
                         <div key={i} style={{ width:9, height:9, borderRadius:"50%", background:color, opacity:i<pagados?1:0.2 }}/>
@@ -2417,7 +2504,7 @@ function TabFijos({ fijosData=[], onSave, onDelete }) {
                       <div style={{fontSize:11,color:C.muted,textAlign:"center"}}>{Math.round(Number(item.monto)/total*100)}% del total</div>
                       <div style={{fontSize:14,fontWeight:600,color,textAlign:"right"}}>{$f(item.monto)}</div>
                       <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                        {editMode&&<><button style={S.btnIcon} onClick={()=>handleEdit(item)}>✏️</button>
+                        {editMode&&<><button style={S.btnIcon} onClick={()=>handleEdit(item)}>✎</button>
                         <button style={{...S.btnIcon,...S.btnDel}} onClick={()=>handleDelete(item.id)}>✕</button></>}
                       </div>
                     </>
