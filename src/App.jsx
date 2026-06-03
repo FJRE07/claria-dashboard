@@ -962,7 +962,6 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
   const [selected,setSelected]=useState(null);
   const [editCard,setEditCard]=useState(null);
   const [adding,setAdding]=useState(false);
-  const [importCard,setImportCard]=useState(null);
   const [importandoEstado,setImportandoEstado]=useState(false);
   const [resetting,setResetting]=useState(false);
 
@@ -1049,7 +1048,7 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
                       ))}
                     </div>
                     <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                      <button onClick={()=>setImportCard(c)} style={{ flex:1, ...BtnP, fontSize:12, padding:"6px 0", background:C.blue }}>↑ Importar estado</button>
+                      <button onClick={()=>setImportandoEstado(true)} style={{ flex:1, ...BtnP, fontSize:12, padding:"6px 0", background:C.blue }}>↑ Importar estado PDF</button>
                     </div>
                     <div style={{ display:"flex", gap:8, marginTop:8 }}>
                       <button onClick={()=>setEditCard(c)} style={{ flex:1, ...BtnS, fontSize:12, padding:"6px 0" }}>✏️ Editar</button>
@@ -1080,12 +1079,6 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
         onSave={saveCard}
         onClose={()=>{setAdding(false);setEditCard(null);}}
       />}
-      {importCard&&<ImportModal
-        card={importCard}
-        onDone={()=>{ setImportCard(null); onImportDone(); }}
-        onClose={()=>setImportCard(null)}
-      />}
-
       {importandoEstado&&<ImportarEstadoModal
         onIniciar={(archivos)=>{ onIniciarImport(archivos); setImportandoEstado(false); }}
         onClose={()=>setImportandoEstado(false)}
@@ -2710,7 +2703,7 @@ function Dashboard({ logout }) {
       try {
         const b64 = await pdfABase64(archivos[i]);
         const res = await API.parsearEstado(b64);
-        const datos = res.datos;
+        const datos = { ...res.datos, nombre_archivo: archivos[i].name };
         const tarjeta_existente = res.tarjeta_existente ?? null;
         setProcesos(prev => prev.map(p => p.id === proc.id ? { ...p, estado: "listo", datos, tarjeta_existente } : p));
       } catch (e) {
