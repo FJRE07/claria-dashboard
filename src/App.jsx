@@ -1281,7 +1281,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
         </div>
       </SCard>
 
-      <SeccionPresupuesto porCategoria={d.porCategoria} presupuesto={d.presupuesto}/>
+      <SeccionPresupuesto porCategoria={d.porCategoria} presupuesto={d.presupuesto} groupBudgets={groupBudgets}/>
       <SeccionAhorroMSI dash={d}/>
 
     </div>
@@ -1645,11 +1645,47 @@ const GRUPOS = {
   Prescindible: { color:"#888780", cats:["Suscripciones"] },
 };
 
-function SeccionPresupuesto({ porCategoria, presupuesto }) {
+function SeccionPresupuesto({ porCategoria, presupuesto, groupBudgets }) {
+  // Mapear categorías API → dashboard para el gasto real
   const gastoReal = {};
-  (porCategoria||[]).forEach(c=>{ gastoReal[c.categoria]=Number(c.total); });
+  (porCategoria||[]).forEach(c=>{
+    const dashCat = API_TO_DASH_CAT[c.categoria] ?? c.categoria;
+    gastoReal[dashCat] = (gastoReal[dashCat]||0) + Number(c.total);
+  });
+  // Presupuesto: usar cats de localStorage si existen, sino usar groupBudgets dividido
   const presupMap = {};
-  (presupuesto||[]).forEach(p=>{ presupMap[p.categoria]=Number(p.monto); });
+  try {
+    const saved = localStorage.getItem("claria_ppto_cats");
+    if(saved) {
+      const cats = JSON.parse(saved);
+      // Mapear nombres de categorías de presupuesto a categorías de transacciones
+      const PPTO_TO_DASH = {
+        "Restaurantes":"Comida","Comida":"Comida","Alimentación":"Comida",
+        "Super":"Supermercado","Supermercado":"Supermercado","Despensa":"Supermercado",
+        "Transporte":"Transporte","Uber":"Transporte","Gasolina":"Transporte",
+        "Salud":"Salud","Médico":"Salud","Farmacia":"Salud",
+        "Suscripciones":"Suscripciones","Streaming":"Suscripciones","Netflix":"Suscripciones",
+        "Compras":"Compras","Ropa":"Compras",
+        "Otros":"Otros","Varios":"Otros",
+      };
+      const groupTotals = {Esencial:0,Importante:0,Flexible:0,Prescindible:0};
+      cats.forEach(c=>{
+        const mapped = PPTO_TO_DASH[c.nombre];
+        if(mapped) presupMap[mapped]=(presupMap[mapped]||0)+c.monto;
+        else groupTotals[c.prioridad]=(groupTotals[c.prioridad]||0)+c.monto;
+      });
+      // Para categorías sin mapeo directo, distribuir del total del grupo
+      Object.entries(GRUPOS).forEach(([grp,{cats:gCats}])=>{
+        const unmapped=gCats.filter(c=>!presupMap[c]);
+        if(unmapped.length>0&&groupTotals[grp]>0)
+          unmapped.forEach(c=>{ presupMap[c]=(presupMap[c]||0)+groupTotals[grp]/unmapped.length; });
+      });
+    } else {
+      (presupuesto||[]).forEach(p=>{ presupMap[p.categoria]=Number(p.monto); });
+    }
+  } catch {
+    (presupuesto||[]).forEach(p=>{ presupMap[p.categoria]=Number(p.monto); });
+  }
   return (
     <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
       <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>presupuesto vs gasto real</div>
@@ -1714,9 +1750,12 @@ function SeccionAhorroMSI({ dash }) {
   useEffect(()=>{ setLocalPlanes((dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0)); },[JSON.stringify(dash?.msiActivos)]);
   useEffect(()=>{ setLocalAhorros(dash?.ahorrosTxs||[]); },[JSON.stringify(dash?.ahorrosTxs)]);
   const [metaAnual,      setMetaAnual]      = useState(()=>{
+    const saved = localStorage.getItem("claria_meta_ahorro");
+    if(saved) return Number(saved);
     const mo = (dash?.ahorroMensual||AHORRO_MENSUAL);
     return mo * (11 - new Date().getMonth());
   });
+  const saveMeta = (val)=>{ setMetaAnual(val); localStorage.setItem("claria_meta_ahorro",String(val)); };
 
   const acumulado     = localAhorros.reduce((s,m)=>s+m.amt, 0);
   const libre         = Number(dash?.libre||0);
@@ -1858,8 +1897,8 @@ function SeccionAhorroMSI({ dash }) {
                   <span style={{ fontSize:11, color:C.muted }}>$</span>
                   <input value={metaInput} onChange={e=>setMetaInput(e.target.value.replace(/[^0-9]/g,""))}
                     style={{ width:80, background:C.bg2, border:`1px solid ${C.border}`, borderRadius:6, padding:"3px 6px", fontSize:12, color:C.text, outline:"none", textAlign:"right" }}
-                    onKeyDown={e=>{if(e.key==="Enter"){setMetaAnual(Number(metaInput)||metaAnual);setEditingMeta(false);}}}/>
-                  <button onClick={()=>{setMetaAnual(Number(metaInput)||metaAnual);setEditingMeta(false);}} style={{ background:"#185FA5", border:"none", borderRadius:5, color:"#fff", padding:"3px 8px", fontSize:11, cursor:"pointer" }}>OK</button>
+                    onKeyDown={e=>{if(e.key==="Enter"){saveMeta(Number(metaInput)||metaAnual);setEditingMeta(false);}}}/>
+                  <button onClick={()=>{saveMeta(Number(metaInput)||metaAnual);setEditingMeta(false);}} style={{ background:"#185FA5", border:"none", borderRadius:5, color:"#fff", padding:"3px 8px", fontSize:11, cursor:"pointer" }}>OK</button>
                 </div>
               : <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
                   <div style={{ fontSize:15, fontWeight:600, color:"#1D9E75" }}>${metaAnual.toLocaleString("es-MX")} meta</div>
