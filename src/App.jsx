@@ -1174,6 +1174,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     ahorrosTxs: txs.filter(t=>t.cat==="Ahorro").map(t=>({ id:t.id, desc:t.desc, amt:Math.abs(t.amt), date:t.date })),
     onDeleteMsi,
     onDeleteAhorro,
+    cards,
   };
 
   return (
@@ -1707,7 +1708,7 @@ function SeccionAhorroMSI({ dash }) {
   const [addModoAhorro,  setAddModoAhorro]  = useState(false);
   const [addModoMSI,     setAddModoMSI]     = useState(false);
   const [nuevoAhorro,    setNuevoAhorro]    = useState({desc:"",amt:""});
-  const [nuevoMSI,       setNuevoMSI]       = useState({descripcion:"",cuota_mensual:"",total_pagos:"",pagos_hechos:"0"});
+  const [nuevoMSI,       setNuevoMSI]       = useState({descripcion:"",monto_total:"",total_pagos:"",pagos_hechos:"0",tarjeta_id:""});
   const [localAhorros,   setLocalAhorros]   = useState(dash?.ahorrosTxs||[]);
   const [localPlanes,    setLocalPlanes]    = useState(()=>(dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0));
   useEffect(()=>{ setLocalPlanes((dash?.msiActivos||[]).filter(m=>Number(m.pagos_restantes)>0)); },[JSON.stringify(dash?.msiActivos)]);
@@ -1748,13 +1749,15 @@ function SeccionAhorroMSI({ dash }) {
     dash?.onDeleteAhorro?.(apiId);
   };
   const agregarMSI = async()=>{
-    if(!nuevoMSI.descripcion||!nuevoMSI.cuota_mensual||!nuevoMSI.total_pagos)return;
-    const total=Number(nuevoMSI.total_pagos), pagados=Number(nuevoMSI.pagos_hechos)||0, mo=Number(nuevoMSI.cuota_mensual);
+    const total=Number(nuevoMSI.total_pagos), montoTotal=Number(nuevoMSI.monto_total), pagados=Number(nuevoMSI.pagos_hechos)||0;
+    const mo=montoTotal>0&&total>0?Math.round(montoTotal/total):0;
+    const tid=nuevoMSI.tarjeta_id?Number(nuevoMSI.tarjeta_id):null;
+    if(!nuevoMSI.descripcion||!montoTotal||!total||!tid)return;
     const plan={id:Date.now(),descripcion:nuevoMSI.descripcion,cuota_mensual:mo,total_pagos:total,pagos_hechos:pagados,pagos_restantes:total-pagados,saldo_pendiente:mo*(total-pagados),proxima_cuota:null};
     setLocalPlanes(p=>[...p,plan]);
-    setNuevoMSI({descripcion:"",cuota_mensual:"",total_pagos:"",pagos_hechos:"0"}); setAddModoMSI(false);
+    setNuevoMSI({descripcion:"",monto_total:"",total_pagos:"",pagos_hechos:"0",tarjeta_id:""}); setAddModoMSI(false);
     try{
-      const r=await API.postMSI({descripcion:plan.descripcion,cuota_mensual:mo,total_pagos:total,monto_total:mo*total,fecha_inicio:new Date().toISOString().slice(0,10),pagos_hechos:pagados});
+      const r=await API.postMSI({descripcion:plan.descripcion,cuota_mensual:mo,total_pagos:total,monto_total:montoTotal,fecha_inicio:new Date().toISOString().slice(0,10),pagos_hechos:pagados,tarjeta_id:tid});
       if(r?.id) setLocalPlanes(p=>p.map(x=>x.id===plan.id?{...x,id:r.id}:x));
     }catch(e){console.error("Error guardando MSI:",e);}
   };
@@ -1781,22 +1784,48 @@ function SeccionAhorroMSI({ dash }) {
 
     {/* Modal agregar MSI */}
     {addModoMSI&&<div onClick={()=>setAddModoMSI(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
-      <div onClick={e=>e.stopPropagation()} style={{width:400,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"24px 28px",animation:"slideUp .2s ease"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:420,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"24px 28px",animation:"slideUp .2s ease"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div style={{fontSize:15,fontWeight:600,color:C.text}}>Agregar plan MSI</div>
           <button onClick={()=>setAddModoMSI(false)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-          {[["Descripción","descripcion","ej. iPhone 16 Pro"],["Cuota mensual","cuota_mensual","$0"],["Total de pagos","total_pagos","12"],["Pagos realizados","pagos_hechos","0"]].map(([l,k,ph])=>(
-            <div key={k}><div style={{fontSize:11,color:C.muted,marginBottom:4}}>{l}</div>
-              <input style={{...inpS,textAlign:k!=="descripcion"?"right":"left"}} placeholder={ph} value={nuevoMSI[k]}
-                onChange={e=>setNuevoMSI(p=>({...p,[k]:k==="descripcion"?e.target.value:e.target.value.replace(/[^0-9.]/g,"")}))}
-                onKeyDown={e=>e.key==="Enter"&&agregarMSI()}/></div>
-          ))}
+          <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Descripción</div>
+            <input style={inpS} placeholder="ej. iPhone 16 Pro" value={nuevoMSI.descripcion}
+              onChange={e=>setNuevoMSI(p=>({...p,descripcion:e.target.value}))}/></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Monto total</div>
+              <input style={{...inpS,textAlign:"right"}} placeholder="$0" value={nuevoMSI.monto_total}
+                onChange={e=>setNuevoMSI(p=>({...p,monto_total:e.target.value.replace(/[^0-9.]/g,"")}))} /></div>
+            <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Número de pagos</div>
+              <input style={{...inpS,textAlign:"right"}} placeholder="12" value={nuevoMSI.total_pagos}
+                onChange={e=>setNuevoMSI(p=>({...p,total_pagos:e.target.value.replace(/[^0-9]/g,"")}))} /></div>
+            <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Pagos realizados</div>
+              <input style={{...inpS,textAlign:"right"}} placeholder="0" value={nuevoMSI.pagos_hechos}
+                onChange={e=>setNuevoMSI(p=>({...p,pagos_hechos:e.target.value.replace(/[^0-9]/g,"")}))} /></div>
+            <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Cuota mensual</div>
+              <div style={{...inpS,textAlign:"right",color:C.textMuted,background:C.card}}>
+                {nuevoMSI.monto_total&&nuevoMSI.total_pagos
+                  ? "$"+Math.round(Number(nuevoMSI.monto_total)/Number(nuevoMSI.total_pagos)).toLocaleString("es-MX")
+                  : "—"}
+              </div>
+            </div>
+          </div>
+          <div><div style={{fontSize:11,color:C.muted,marginBottom:4}}>Tarjeta</div>
+            <select style={{...inpS,cursor:"pointer"}} value={nuevoMSI.tarjeta_id}
+              onChange={e=>setNuevoMSI(p=>({...p,tarjeta_id:e.target.value}))}>
+              <option value="">Selecciona una tarjeta…</option>
+              {(dash?.cards||[]).map(c=><option key={c.id} value={c.id}>{c.name} •••• {c.last4}</option>)}
+            </select>
+          </div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <button onClick={()=>setAddModoMSI(false)} style={{padding:"7px 16px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,cursor:"pointer",fontSize:12}}>Cancelar</button>
-          <button onClick={agregarMSI} style={{padding:"7px 16px",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:500}}>Agregar</button>
+          <button onClick={agregarMSI}
+            disabled={!nuevoMSI.descripcion||!nuevoMSI.monto_total||!nuevoMSI.total_pagos||!nuevoMSI.tarjeta_id}
+            style={{padding:"7px 16px",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:500,opacity:(!nuevoMSI.descripcion||!nuevoMSI.monto_total||!nuevoMSI.total_pagos||!nuevoMSI.tarjeta_id)?0.45:1}}>
+            Agregar
+          </button>
         </div>
       </div>
     </div>}
