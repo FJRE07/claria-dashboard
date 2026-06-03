@@ -1151,9 +1151,6 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
   const tendenciaDiff = histLast3Avg>0?(gastoVar-histLast3Avg)/histLast3Avg:0;
 
   const porCategoria = Object.entries(spentByCat).map(([categoria,total])=>({categoria,total}));
-  const presupuesto  = Object.entries(GRUPOS).flatMap(([grp,{cats}])=>
-    cats.map(cat=>({ categoria:cat, monto:(groupBudgets[grp]||0)/cats.length }))
-  );
   const msiActivosApi = activeMsi.map(p=>({
     id:p.id, descripcion:p.name,
     pagos_hechos:p.paid, total_pagos:p.months,
@@ -1163,7 +1160,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     proxima_cuota:new Date(new Date(p.start).setMonth(new Date(p.start).getMonth()+p.paid+1)).toISOString().slice(0,10),
   }));
   const d = {
-    porCategoria, presupuesto,
+    porCategoria,
     libre:      libreTotal,
     acumulado:  prevSavings + thisMoSavings,
     msiActivos: msiActivosApi,
