@@ -44,6 +44,7 @@ export const getMSI         = () => req("GET", "/api/msi");
 export const postMSI        = (data) => req("POST", "/api/msi", data);
 export const putMSI         = (id, data) => req("PUT", `/api/msi/${id}`, data);
 export const deleteMSI      = (id) => req("DELETE", `/api/msi/${id}`);
+export const consolidarMSI  = ()   => req("POST", "/api/msi/consolidar");
 export const getPresupuesto       = ()              => req("GET", "/api/presupuesto");
 export const getPresupuestoGrupos = ()              => req("GET", "/api/presupuesto/grupos");
 export const putPresupuestoGrupo  = (p, monto)      => req("PUT", `/api/presupuesto/grupos/${p}`, { monto });
