@@ -903,6 +903,27 @@ function ProgresoPanel({ procesos, cards, onGuardar, onLimpiar, onClose }) {
           {procesos.map((p,i)=>{
             const st = ST[p.estado]||ST.pendiente;
             const sel = tarjetaSel[p.id] ?? p.tarjeta_existente?.id ?? "";
+            // Detectar si hay otros archivos del mismo last4+banco
+            const key = `${p.datos?.last4}-${(p.datos?.banco||"").toLowerCase()}`;
+            const hermanos = procesos.filter(x => x.id!==p.id && x.estado==="listo" &&
+              `${x.datos?.last4}-${(x.datos?.banco||"").toLowerCase()}` === key);
+            const esDuplicado = p.estado==="listo" && hermanos.length > 0;
+
+            // Al cambiar la tarjeta, propagar a todos los archivos del mismo last4+banco
+            const onChangeTarjeta = (e) => {
+              const val = e.target.value ? Number(e.target.value) : null;
+              setTarjetaSel(prev => {
+                const next = {...prev, [p.id]: val};
+                procesos.forEach(x => {
+                  if (x.id !== p.id && x.estado === "listo" &&
+                      `${x.datos?.last4}-${(x.datos?.banco||"").toLowerCase()}` === key) {
+                    next[x.id] = val;
+                  }
+                });
+                return next;
+              });
+            };
+
             return (
               <div key={p.id} style={{ padding:"10px 20px",borderBottom:`1px solid ${C.border}` }}>
                 <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:p.estado==="listo"?8:0 }}>
@@ -910,9 +931,9 @@ function ProgresoPanel({ procesos, cards, onGuardar, onLimpiar, onClose }) {
                   <div style={{ flex:1,minWidth:0 }}>
                     <div style={{ fontSize:12,fontWeight:500,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.nombre}</div>
                     {p.estado==="listo"&&p.datos&&(
-                      <div style={{ fontSize:11,color:C.textMuted,marginTop:1 }}>
-                        {p.datos.nombre_tarjeta} · {p.datos.banco} · {p.datos.transacciones?.length||0} tx
-                        {(p.datos.transacciones?.filter(t=>t.tipo==="msi").length||0)>0 && ` · ${p.datos.transacciones.filter(t=>t.tipo==="msi").length} MSI`}
+                      <div style={{ fontSize:11,color:C.textMuted,marginTop:1,display:"flex",alignItems:"center",gap:6 }}>
+                        <span>{p.datos.nombre_tarjeta} · {p.datos.banco} ••••{p.datos.last4} · {p.datos.transacciones?.length||0} tx{(p.datos.transacciones?.filter(t=>t.tipo==="msi").length||0)>0 ? ` · ${p.datos.transacciones.filter(t=>t.tipo==="msi").length} MSI`:""}</span>
+                        {esDuplicado&&<span style={{ background:C.yellowDim,color:C.yellow,fontSize:10,padding:"1px 6px",borderRadius:99,flexShrink:0 }}>misma tarjeta</span>}
                       </div>
                     )}
                     {p.estado==="procesando"&&<div style={{ fontSize:11,color:C.yellow }}>Analizando con Claude…</div>}
@@ -926,14 +947,20 @@ function ProgresoPanel({ procesos, cards, onGuardar, onLimpiar, onClose }) {
                     {p.error}
                   </div>
                 )}
-                {/* Card selector para los listos (no guardados aún) */}
-                {p.estado==="listo"&&(
+                {/* Card selector — si hay duplicados, mostrar solo en el primero del grupo */}
+                {p.estado==="listo"&&(!esDuplicado||procesos.findIndex(x=>x.estado==="listo"&&`${x.datos?.last4}-${(x.datos?.banco||"").toLowerCase()}`===key)===i)&&(
                   <select style={{ width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 8px",color:C.text,fontSize:11,cursor:"pointer" }}
                     value={sel}
-                    onChange={e=>setTarjetaSel(prev=>({...prev,[p.id]:e.target.value?Number(e.target.value):null}))}>
+                    onChange={onChangeTarjeta}>
                     <option value="">➕ Crear tarjeta nueva ({p.datos?.nombre_tarjeta})</option>
                     {cards.map(c=><option key={c.id} value={c.id}>💳 {c.name} •••• {c.last4}</option>)}
                   </select>
+                )}
+                {/* Para duplicados que no son el primero, mostrar qué tarjeta se usará */}
+                {p.estado==="listo"&&esDuplicado&&procesos.findIndex(x=>x.estado==="listo"&&`${x.datos?.last4}-${(x.datos?.banco||"").toLowerCase()}`===key)!==i&&(
+                  <div style={{ fontSize:11,color:C.textMuted,fontStyle:"italic",marginTop:2 }}>
+                    {sel ? `→ Se agregará a: 💳 ${cards.find(c=>c.id===sel)?.name||"tarjeta existente"}` : "→ Se agrupará con el estado anterior de la misma tarjeta"}
+                  </div>
                 )}
               </div>
             );
@@ -2800,9 +2827,17 @@ function Dashboard({ logout }) {
   };
 
   const guardarImportados = async (items) => {
+    // Tarjetas creadas en este lote: key = "last4-banco" → tarjeta_id
+    // Evita crear tarjetas duplicadas cuando varios PDFs son de la misma tarjeta
+    const cardByKey = {};
     for (const item of items) {
+      const key = `${item.datos?.last4}-${(item.datos?.banco||"").toLowerCase()}`;
+      // Si el usuario no seleccionó una tarjeta explícitamente, usar la creada en el lote
+      const tarjeta_id = item.tarjeta_id_sel ?? cardByKey[key] ?? null;
       try {
-        await API.importarEstado(item.datos, item.tarjeta_id_sel ?? null);
+        const res = await API.importarEstado(item.datos, tarjeta_id);
+        // Registrar la tarjeta creada para los siguientes PDFs del mismo lote
+        if (res?.tarjeta_id && !cardByKey[key]) cardByKey[key] = res.tarjeta_id;
         setProcesos(prev => prev.map(p => p.id === item.id ? { ...p, estado: "guardado" } : p));
       } catch (e) {
         setProcesos(prev => prev.map(p => p.id === item.id ? { ...p, estado: "error", error: e.message } : p));
