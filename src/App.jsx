@@ -1281,7 +1281,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
         </div>
       </SCard>
 
-      <SeccionPresupuesto porCategoria={d.porCategoria} presupuesto={d.presupuesto} groupBudgets={groupBudgets}/>
+      <SeccionPresupuesto porCategoria={d.porCategoria}/>
       <SeccionAhorroMSI dash={d}/>
 
     </div>
@@ -1638,96 +1638,70 @@ function LoginScreen() {
 }
 
 // ── SECCIÓN PRESUPUESTO VS GASTO REAL ────────────────────────────────────────
-const GRUPOS = {
-  Esencial:     { color:"#E24B4A", cats:["Salud","Supermercado"] },
-  Importante:   { color:"#BA7517", cats:["Comida"] },
-  Flexible:     { color:"#378ADD", cats:["Transporte","Compras","Otros"] },
-  Prescindible: { color:"#888780", cats:["Suscripciones"] },
-};
+const GRP_COLOR = { Esencial:"#E24B4A", Importante:"#BA7517", Flexible:"#378ADD", Prescindible:"#888780" };
+const PRIORIDADES_ORD = ["Esencial","Importante","Flexible","Prescindible"];
 
-function SeccionPresupuesto({ porCategoria, presupuesto, groupBudgets }) {
-  // Mapear categorías API → dashboard para el gasto real
-  const gastoReal = {};
+function SeccionPresupuesto({ porCategoria }) {
+  // Leer cats del usuario desde localStorage
+  let userCats = CATS_DEFAULT;
+  try { const s=localStorage.getItem("claria_ppto_cats"); if(s) userCats=JSON.parse(s); } catch {}
+
+  // Gasto real por grupo de prioridad: mapear categorías API → dashboard → grupo
+  const gastoGrupo = { Esencial:0, Importante:0, Flexible:0, Prescindible:0 };
   (porCategoria||[]).forEach(c=>{
     const dashCat = API_TO_DASH_CAT[c.categoria] ?? c.categoria;
-    gastoReal[dashCat] = (gastoReal[dashCat]||0) + Number(c.total);
+    const grp = CAT_GROUP[dashCat];
+    if(grp && grp in gastoGrupo) gastoGrupo[grp] += Number(c.total);
   });
-  // Presupuesto: usar cats de localStorage si existen, sino usar groupBudgets dividido
-  const presupMap = {};
-  try {
-    const saved = localStorage.getItem("claria_ppto_cats");
-    if(saved) {
-      const cats = JSON.parse(saved);
-      // Mapear nombres de categorías de presupuesto a categorías de transacciones
-      const PPTO_TO_DASH = {
-        "Restaurantes":"Comida","Comida":"Comida","Alimentación":"Comida",
-        "Super":"Supermercado","Supermercado":"Supermercado","Despensa":"Supermercado",
-        "Transporte":"Transporte","Uber":"Transporte","Gasolina":"Transporte",
-        "Salud":"Salud","Médico":"Salud","Farmacia":"Salud",
-        "Suscripciones":"Suscripciones","Streaming":"Suscripciones","Netflix":"Suscripciones",
-        "Compras":"Compras","Ropa":"Compras",
-        "Otros":"Otros","Varios":"Otros",
-      };
-      const groupTotals = {Esencial:0,Importante:0,Flexible:0,Prescindible:0};
-      cats.forEach(c=>{
-        const mapped = PPTO_TO_DASH[c.nombre];
-        if(mapped) presupMap[mapped]=(presupMap[mapped]||0)+c.monto;
-        else groupTotals[c.prioridad]=(groupTotals[c.prioridad]||0)+c.monto;
-      });
-      // Para categorías sin mapeo directo, distribuir del total del grupo
-      Object.entries(GRUPOS).forEach(([grp,{cats:gCats}])=>{
-        const unmapped=gCats.filter(c=>!presupMap[c]);
-        if(unmapped.length>0&&groupTotals[grp]>0)
-          unmapped.forEach(c=>{ presupMap[c]=(presupMap[c]||0)+groupTotals[grp]/unmapped.length; });
-      });
-    } else {
-      (presupuesto||[]).forEach(p=>{ presupMap[p.categoria]=Number(p.monto); });
-    }
-  } catch {
-    (presupuesto||[]).forEach(p=>{ presupMap[p.categoria]=Number(p.monto); });
-  }
+
+  // Presupuesto por grupo: suma de los montos de las cats del usuario
+  const budgetGrupo = { Esencial:0, Importante:0, Flexible:0, Prescindible:0 };
+  userCats.forEach(c=>{ if(c.prioridad in budgetGrupo) budgetGrupo[c.prioridad]+=Number(c.monto)||0; });
+
+  const grpsConDatos = PRIORIDADES_ORD.filter(g=>budgetGrupo[g]>0||(userCats.some(c=>c.prioridad===g)));
+  const cols = Math.min(grpsConDatos.length||4, 4);
+
   return (
     <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
       <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>presupuesto vs gasto real</div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:16 }}>
-        {Object.entries(GRUPOS).map(([nombre,{color,cats}])=>{
-          const totalGrupo  = cats.reduce((s,c)=>s+(gastoReal[c]||0),0);
-          const totalPresup = cats.reduce((s,c)=>s+(presupMap[c]||0),0);
-          const pctGrupo    = totalPresup>0?Math.min((totalGrupo/totalPresup)*100,100):0;
-          const excede      = totalGrupo>totalPresup&&totalPresup>0;
-          return (
-            <div key={nombre} style={{ background:`${excede?"#E24B4A":color}12`, border:`1px solid ${excede?"#E24B4A":color}40`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:6 }}>
-                <div style={{ fontSize:15, fontWeight:600, color }}>{nombre}</div>
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontSize:20, fontWeight:600, color, lineHeight:1 }}>
-                    ${totalGrupo.toLocaleString("es-MX",{maximumFractionDigits:0})}
+      {grpsConDatos.length===0
+        ? <div style={{ fontSize:13, color:C.muted, textAlign:"center", padding:"16px 0" }}>
+            Define tus categorías en el tab <strong style={{color:C.textDim}}>Presupuestos</strong> para ver el comparativo.
+          </div>
+        : <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`, gap:16 }}>
+            {grpsConDatos.map(grp=>{
+              const color   = GRP_COLOR[grp];
+              const budget  = budgetGrupo[grp];
+              const gasto   = gastoGrupo[grp];
+              const pct     = budget>0?Math.min(gasto/budget*100,100):0;
+              const excede  = gasto>budget&&budget>0;
+              const grpCats = userCats.filter(c=>c.prioridad===grp);
+              return (
+                <div key={grp} style={{ background:`${excede?"#E24B4A":color}12`, border:`1px solid ${excede?"#E24B4A":color}40`, borderRadius:10, padding:"10px 12px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color }}>{grp}</div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:18, fontWeight:700, color, lineHeight:1 }}>
+                        ${gasto.toLocaleString("es-MX",{maximumFractionDigits:0})}
+                      </div>
+                      {budget>0&&<div style={{ fontSize:11, color:C.muted }}>de ${budget.toLocaleString("es-MX",{maximumFractionDigits:0})}</div>}
+                    </div>
                   </div>
-                  {totalPresup>0&&<div style={{ fontSize:11, color:C.muted }}>de ${totalPresup.toLocaleString("es-MX",{maximumFractionDigits:0})}</div>}
+                  <div style={{ height:5, background:C.bg2, borderRadius:3, overflow:"hidden", marginBottom:8 }}>
+                    <div style={{ height:"100%", width:`${pct}%`, background:excede?"#E24B4A":color, borderRadius:3 }}/>
+                  </div>
+                  {grpCats.map(cat=>(
+                    <div key={cat.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                      <div style={{ fontSize:11, color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"60%" }}>{cat.nombre}</div>
+                      <div style={{ fontSize:11, fontWeight:600, color, flexShrink:0 }}>${Number(cat.monto||0).toLocaleString("es-MX",{maximumFractionDigits:0})}</div>
+                    </div>
+                  ))}
+                  {grpCats.length===0&&<div style={{ fontSize:11, color:C.muted }}>Sin categorías asignadas</div>}
                 </div>
-              </div>
-              <div style={{ height:5, background:C.bg2, borderRadius:3, overflow:"hidden", marginBottom:8 }}>
-                <div style={{ height:"100%", width:`${pctGrupo}%`, background:excede?"#E24B4A":color, borderRadius:3 }}/>
-              </div>
-              {[...cats].sort((a,b)=>(gastoReal[b]||0)-(gastoReal[a]||0)).map(cat=>{
-                const g=gastoReal[cat]||0; const p=presupMap[cat]||0;
-                const pct=p>0?Math.min((g/p)*100,100):0; const over=g>p&&p>0;
-                return (
-                  <div key={cat} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
-                    <div style={{ fontSize:11, color:C.muted, width:90, flexShrink:0, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{cat}</div>
-                    <div style={{ flex:1, height:3, background:C.bg2, borderRadius:2, overflow:"hidden" }}>
-                      <div style={{ height:"100%", width:`${pct}%`, background:over?"#E24B4A":color, opacity:0.7, borderRadius:2 }}/>
-                    </div>
-                    <div style={{ fontSize:11, width:52, textAlign:"right", flexShrink:0, color:g>0?(over?"#E24B4A":color):C.muted }}>
-                      ${g.toLocaleString("es-MX",{maximumFractionDigits:0})}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+      }
     </div>
   );
 }
