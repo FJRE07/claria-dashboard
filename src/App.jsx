@@ -780,9 +780,10 @@ const TIPO_COLOR = { cargo:"#FF4560", abono:"#00D4A0", msi:"#FFBA2C" };
 const TIPO_LABEL = { cargo:"Cargo", abono:"Abono", msi:"MSI" };
 
 function ImportarEstadoModal({ cards, onDone, onClose }) {
-  const [paso, setPaso]         = useState("upload");   // upload | parsing | preview | guardando | listo
+  const [paso, setPaso]         = useState("upload");
   const [archivos, setArchivos] = useState([]);
-  const [resultados, setResultados] = useState([]);     // [{ archivo, datos, tarjeta_existente, tarjeta_id_sel, error }]
+  const [resultados, setResultados] = useState([]);
+  const [progreso, setProgreso] = useState({ actual:0, total:0, archivo:"" });
   const [err, setErr]           = useState("");
 
   const pdfABase64 = (file) => new Promise((res, rej) => {
@@ -795,8 +796,11 @@ function ImportarEstadoModal({ cards, onDone, onClose }) {
   const parsear = async () => {
     if (!archivos.length) return;
     setPaso("parsing"); setErr("");
+    setProgreso({ actual:0, total:archivos.length, archivo:"" });
     const resultados = [];
-    for (const file of archivos) {
+    for (let i=0; i<archivos.length; i++) {
+      const file = archivos[i];
+      setProgreso({ actual:i, total:archivos.length, archivo:file.name });
       try {
         const b64  = await pdfABase64(file);
         const resp = await API.parsearEstado(b64);
@@ -810,6 +814,7 @@ function ImportarEstadoModal({ cards, onDone, onClose }) {
       } catch (e) {
         resultados.push({ archivo: file.name, datos: null, error: e.message });
       }
+      setProgreso({ actual:i+1, total:archivos.length, archivo:file.name });
     }
     setResultados(resultados);
     setPaso("preview");
@@ -883,10 +888,38 @@ function ImportarEstadoModal({ cards, onDone, onClose }) {
 
           {/* ── PARSING ── */}
           {paso==="parsing"&&(
-            <div style={{ textAlign:"center",padding:"40px 0" }}>
-              <div style={{ width:44,height:44,borderRadius:"50%",border:`3px solid ${C.border}`,borderTopColor:C.accent,animation:"spin 0.8s linear infinite",margin:"0 auto 16px" }}/>
-              <div style={{ color:C.textDim,fontSize:14 }}>Claude está analizando {archivos.length} PDF{archivos.length>1?"s":""}…</div>
-              <div style={{ color:C.textMuted,fontSize:12,marginTop:6 }}>Esto puede tomar 10–30 segundos por archivo</div>
+            <div style={{ padding:"40px 24px" }}>
+              <div style={{ textAlign:"center",marginBottom:28 }}>
+                <div style={{ width:44,height:44,borderRadius:"50%",border:`3px solid ${C.border}`,borderTopColor:C.accent,animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
+                <div style={{ color:C.text,fontSize:14,fontWeight:500 }}>
+                  Analizando archivo {progreso.actual+1} de {progreso.total}…
+                </div>
+                <div style={{ color:C.textMuted,fontSize:12,marginTop:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                  {progreso.archivo}
+                </div>
+              </div>
+              {/* Barra de progreso */}
+              <div style={{ background:C.border,borderRadius:99,height:8,overflow:"hidden",marginBottom:10 }}>
+                <div style={{ height:"100%",borderRadius:99,background:C.accent,transition:"width 0.4s ease",
+                  width:`${progreso.total>0?(progreso.actual/progreso.total)*100:0}%` }}/>
+              </div>
+              <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:C.textMuted }}>
+                <span>{progreso.actual} completado{progreso.actual!==1?"s":""}</span>
+                <span>{progreso.total} archivo{progreso.total!==1?"s":""} en total</span>
+              </div>
+              {/* Lista de archivos con estado */}
+              <div style={{ marginTop:20,display:"flex",flexDirection:"column",gap:6 }}>
+                {archivos.map((f,i)=>{
+                  const done = i<progreso.actual;
+                  const current = i===progreso.actual&&progreso.actual<progreso.total;
+                  return (
+                    <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"6px 10px",borderRadius:8,background:done?C.accentDim:current?C.card:C.surface,border:`1px solid ${done?C.accentGlow:current?C.accent+"44":C.border}` }}>
+                      <span style={{ fontSize:14,flexShrink:0 }}>{done?"✅":current?"⏳":"🔵"}</span>
+                      <span style={{ fontSize:12,color:done?C.accent:current?C.text:C.textMuted,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{f.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -1039,18 +1072,13 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
 
   return (
     <div>
-      {/* Botón principal de importación PDF */}
-      <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16 }}>
-        <button onClick={()=>setImportandoEstado(true)}
-          style={{ ...BtnP, background:"linear-gradient(135deg,#7B3F00,#C06000)", display:"flex", alignItems:"center", gap:8, fontSize:13 }}>
-          📄 Importar estados de cuenta PDF
-        </button>
-      </div>
-
       {cards.length===0
         ? <div style={{ textAlign:"center", padding:"60px 0" }}>
             <div style={{ color:C.textMuted, fontSize:14, fontFamily:F, marginBottom:20 }}>No tienes tarjetas registradas.</div>
-            <button onClick={()=>setAdding(true)} style={BtnP}>+ Agregar tarjeta</button>
+            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+              <button onClick={()=>setAdding(true)} style={BtnP}>+ Agregar tarjeta</button>
+              <button onClick={()=>setImportandoEstado(true)} style={BtnP}>📄 Importar estados PDF</button>
+            </div>
           </div>
         : <>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:20, marginBottom:24 }}>
@@ -1107,7 +1135,10 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
               </div>
               <ProgressBar value={totUsed} max={totLim} h={8}/>
             </SCard>}
-            <button onClick={()=>setAdding(true)} style={BtnP}>+ Agregar tarjeta</button>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={()=>setAdding(true)} style={BtnP}>+ Agregar tarjeta</button>
+              <button onClick={()=>setImportandoEstado(true)} style={BtnP}>📄 Importar estados PDF</button>
+            </div>
           </>
       }
       {selected&&<CardDetailModal card={selected} txs={txs} msiPlans={msiPlans} onClose={()=>setSelected(null)}/>}
@@ -1136,7 +1167,7 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
         </div>
         <button onClick={handleReset} disabled={resetting}
           style={{ ...BtnS, color:C.red, borderColor:C.red+"55", fontSize:12, padding:"6px 16px", opacity:resetting?0.5:1, flexShrink:0 }}>
-          {resetting?"Borrando…":"⚠️ Limpiar datos"}
+          {resetting?"Borrando…":"Limpiar datos"}
         </button>
       </div>
     </div>
