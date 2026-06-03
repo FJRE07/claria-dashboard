@@ -486,6 +486,14 @@ function CardDetailModal({ card, txs, msiPlans, onClose }) {
   );
 }
 
+// ── UTILIDAD PDF ─────────────────────────────────────────────────────────────
+const pdfABase64 = (file) => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res(r.result.split(",")[1]);
+  r.onerror = rej;
+  r.readAsDataURL(file);
+});
+
 // ── IMPORT MODAL ──────────────────────────────────────────────────────────────
 function ImportModal({ card, onDone, onClose }) {
   const [archivo, setArchivo] = useState(null);
@@ -775,249 +783,174 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
   );
 }
 
-// ── IMPORTAR ESTADOS DE CUENTA PDF ───────────────────────────────────────────
+// ── IMPORTAR ESTADOS — UPLOAD MODAL (solo selección de archivos) ──────────────
 const TIPO_COLOR = { cargo:"#FF4560", abono:"#00D4A0", msi:"#FFBA2C" };
 const TIPO_LABEL = { cargo:"Cargo", abono:"Abono", msi:"MSI" };
 
-function ImportarEstadoModal({ cards, onDone, onClose }) {
-  const [paso, setPaso]         = useState("upload");
+function ImportarEstadoModal({ onIniciar, onClose }) {
   const [archivos, setArchivos] = useState([]);
-  const [resultados, setResultados] = useState([]);
-  const [progreso, setProgreso] = useState({ actual:0, total:0, archivo:"" });
-  const [err, setErr]           = useState("");
+  const fileRef = useRef(null);
 
-  const pdfABase64 = (file) => new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(",")[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-
-  const parsear = async () => {
-    if (!archivos.length) return;
-    setPaso("parsing"); setErr("");
-    setProgreso({ actual:0, total:archivos.length, archivo:"" });
-    const resultados = [];
-    for (let i=0; i<archivos.length; i++) {
-      const file = archivos[i];
-      setProgreso({ actual:i, total:archivos.length, archivo:file.name });
-      try {
-        const b64  = await pdfABase64(file);
-        const resp = await API.parsearEstado(b64);
-        resultados.push({
-          archivo: file.name,
-          datos:   resp.datos,
-          tarjeta_existente: resp.tarjeta_existente,
-          tarjeta_id_sel: resp.tarjeta_existente?.id ?? null,
-          error: null,
-        });
-      } catch (e) {
-        resultados.push({ archivo: file.name, datos: null, error: e.message });
-      }
-      setProgreso({ actual:i+1, total:archivos.length, archivo:file.name });
-    }
-    setResultados(resultados);
-    setPaso("preview");
+  const agregarArchivos = (nuevos) => {
+    setArchivos(prev => {
+      const sinDuplicados = nuevos.filter(n => !prev.some(p => p.name === n.name && p.size === n.size));
+      return [...prev, ...sinDuplicados];
+    });
   };
 
-  const guardar = async () => {
-    setPaso("guardando");
-    for (const r of resultados) {
-      if (!r.datos) continue;
-      try {
-        await API.importarEstado(r.datos, r.tarjeta_id_sel || undefined);
-      } catch (e) {
-        console.error("importar:", r.archivo, e.message);
-      }
-    }
-    setPaso("listo");
-    onDone();
-  };
-
-  const fmt = n => "$"+Number(n||0).toLocaleString("es-MX",{maximumFractionDigits:0});
+  const eliminar = (i) => setArchivos(prev => prev.filter((_,idx) => idx !== i));
 
   const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)" };
-  const box     = { width:640,maxHeight:"86vh",background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,display:"flex",flexDirection:"column",overflow:"hidden",animation:"slideUp .25s ease" };
-
+  const box     = { width:520,background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,overflow:"hidden",animation:"slideUp .25s ease" };
   return (
     <div onClick={onClose} style={overlay}>
       <div onClick={e=>e.stopPropagation()} style={box}>
-        {/* Header */}
-        <div style={{ padding:"20px 24px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0 }}>
+        <div style={{ padding:"20px 24px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
           <div>
             <div style={{ fontSize:16,fontWeight:600,color:C.text }}>Importar estados de cuenta</div>
-            <div style={{ fontSize:12,color:C.textMuted,marginTop:2 }}>
-              {paso==="upload"   && "Sube uno o varios PDFs — crédito o débito"}
-              {paso==="parsing"  && "Analizando con Claude…"}
-              {paso==="preview"  && "Revisa los datos antes de guardar"}
-              {paso==="guardando"&& "Guardando en la base de datos…"}
-              {paso==="listo"    && "Importación completada"}
-            </div>
+            <div style={{ fontSize:12,color:C.textMuted,marginTop:2 }}>El análisis corre en segundo plano — puedes seguir usando la app</div>
           </div>
           <button onClick={onClose} style={{ background:"transparent",border:"none",cursor:"pointer",color:C.textDim,fontSize:18 }}>✕</button>
         </div>
-
-        {/* Body */}
-        <div style={{ overflowY:"auto",padding:"20px 24px",flex:1 }}>
-
-          {/* ── UPLOAD ── */}
-          {paso==="upload"&&<>
-            <div style={{ border:`2px dashed ${C.border}`,borderRadius:12,padding:"32px 24px",textAlign:"center",background:C.card,marginBottom:16 }}>
-              <div style={{ fontSize:32,marginBottom:8 }}>📄</div>
-              <div style={{ color:C.textDim,fontSize:13,marginBottom:12 }}>Arrastra los PDFs aquí o haz clic para seleccionar</div>
-              <input type="file" accept=".pdf" multiple onChange={e=>setArchivos(Array.from(e.target.files))}
-                style={{ color:C.text,fontSize:13,fontFamily:F }}/>
-              {archivos.length>0&&(
-                <div style={{ marginTop:14,display:"flex",flexDirection:"column",gap:6 }}>
-                  {archivos.map((f,i)=>(
-                    <div key={i} style={{ display:"flex",alignItems:"center",gap:8,background:C.accentDim,borderRadius:8,padding:"6px 12px" }}>
-                      <span style={{ fontSize:14 }}>📄</span>
-                      <span style={{ color:C.accent,fontSize:12,flex:1,textAlign:"left" }}>{f.name}</span>
-                      <span style={{ color:C.textMuted,fontSize:11 }}>{(f.size/1024).toFixed(0)} KB</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+        <div style={{ padding:"20px 24px" }}>
+          {/* Zona de drop / selección */}
+          <input ref={fileRef} type="file" accept=".pdf" multiple style={{ display:"none" }}
+            onChange={e=>{ agregarArchivos(Array.from(e.target.files)); e.target.value=""; }}/>
+          <div onClick={()=>fileRef.current?.click()}
+            style={{ border:`2px dashed ${C.border}`,borderRadius:12,padding:"22px 20px",textAlign:"center",background:C.card,marginBottom:14,cursor:"pointer",transition:"border-color .15s" }}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+            onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+            <div style={{ color:C.textDim,fontSize:13 }}>
+              {archivos.length===0 ? "Haz clic para seleccionar PDFs" : `+ Agregar más PDFs (${archivos.length} seleccionado${archivos.length!==1?"s":""})`}
             </div>
-            <div style={{ fontSize:12,color:C.textMuted,lineHeight:1.6 }}>
-              Soporta estados de <strong style={{color:C.textDim}}>BBVA, Citibanamex, Santander, HSBC, Banorte</strong>.<br/>
-              Se extraen: datos de la tarjeta, todas las transacciones del mes y compras a MSI.
-            </div>
-            {err&&<div style={{ color:C.red,fontSize:12,marginTop:10 }}>{err}</div>}
-          </>}
+          </div>
 
-          {/* ── PARSING ── */}
-          {paso==="parsing"&&(
-            <div style={{ padding:"40px 24px" }}>
-              <div style={{ textAlign:"center",marginBottom:28 }}>
-                <div style={{ width:44,height:44,borderRadius:"50%",border:`3px solid ${C.border}`,borderTopColor:C.accent,animation:"spin 0.8s linear infinite",margin:"0 auto 12px" }}/>
-                <div style={{ color:C.text,fontSize:14,fontWeight:500 }}>
-                  Analizando archivo {progreso.actual+1} de {progreso.total}…
+          {/* Lista de archivos con X individual */}
+          {archivos.length>0&&(
+            <div style={{ display:"flex",flexDirection:"column",gap:5,marginBottom:14,maxHeight:200,overflowY:"auto" }}>
+              {archivos.map((f,i)=>(
+                <div key={i} style={{ display:"flex",alignItems:"center",gap:8,background:C.accentDim,borderRadius:8,padding:"6px 12px" }}>
+                  <span style={{ fontSize:14 }}>📄</span>
+                  <span style={{ color:C.accent,fontSize:12,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{f.name}</span>
+                  <span style={{ color:C.textMuted,fontSize:11,flexShrink:0 }}>{(f.size/1024).toFixed(0)} KB</span>
+                  <button onClick={()=>eliminar(i)}
+                    style={{ background:"transparent",border:"none",cursor:"pointer",color:C.textMuted,fontSize:14,padding:"0 2px",lineHeight:1,flexShrink:0 }}
+                    onMouseEnter={e=>e.currentTarget.style.color=C.red}
+                    onMouseLeave={e=>e.currentTarget.style.color=C.textMuted}>✕</button>
                 </div>
-                <div style={{ color:C.textMuted,fontSize:12,marginTop:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                  {progreso.archivo}
-                </div>
-              </div>
-              {/* Barra de progreso */}
-              <div style={{ background:C.border,borderRadius:99,height:8,overflow:"hidden",marginBottom:10 }}>
-                <div style={{ height:"100%",borderRadius:99,background:C.accent,transition:"width 0.4s ease",
-                  width:`${progreso.total>0?(progreso.actual/progreso.total)*100:0}%` }}/>
-              </div>
-              <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:C.textMuted }}>
-                <span>{progreso.actual} completado{progreso.actual!==1?"s":""}</span>
-                <span>{progreso.total} archivo{progreso.total!==1?"s":""} en total</span>
-              </div>
-              {/* Lista de archivos con estado */}
-              <div style={{ marginTop:20,display:"flex",flexDirection:"column",gap:6 }}>
-                {archivos.map((f,i)=>{
-                  const done = i<progreso.actual;
-                  const current = i===progreso.actual&&progreso.actual<progreso.total;
-                  return (
-                    <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"6px 10px",borderRadius:8,background:done?C.accentDim:current?C.card:C.surface,border:`1px solid ${done?C.accentGlow:current?C.accent+"44":C.border}` }}>
-                      <span style={{ fontSize:14,flexShrink:0 }}>{done?"✅":current?"⏳":"🔵"}</span>
-                      <span style={{ fontSize:12,color:done?C.accent:current?C.text:C.textMuted,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{f.name}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              ))}
             </div>
           )}
 
-          {/* ── PREVIEW ── */}
-          {paso==="preview"&&resultados.map((r,ri)=>(
-            <div key={ri} style={{ marginBottom:20,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
-              {/* Cabecera resultado */}
-              <div style={{ background:C.card,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                  <span style={{ fontSize:14 }}>{r.error?"❌":"✅"}</span>
-                  <span style={{ color:C.text,fontSize:13,fontWeight:500 }}>{r.archivo}</span>
-                </div>
-                {r.datos&&<span style={{ fontSize:11,color:C.textMuted }}>{r.datos.tipo?.toUpperCase()} · {r.datos.banco}</span>}
-              </div>
-
-              {r.error&&<div style={{ padding:"12px 16px",color:C.red,fontSize:12 }}>{r.error}</div>}
-
-              {r.datos&&<div style={{ padding:"12px 16px" }}>
-                {/* Info tarjeta */}
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14 }}>
-                  {[
-                    ["Tarjeta",    r.datos.nombre_tarjeta||"—"],
-                    ["Banco",      r.datos.banco||"—"],
-                    ["Last4",      r.datos.last4||"—"],
-                    ["Límite",     r.datos.limite?fmt(r.datos.limite):"N/A"],
-                  ].map(([l,v])=>(
-                    <div key={l} style={{ background:C.surface,borderRadius:8,padding:"8px 10px" }}>
-                      <div style={{ fontSize:10,color:C.textMuted,textTransform:"uppercase",marginBottom:2 }}>{l}</div>
-                      <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Vincular a tarjeta existente */}
-                <div style={{ marginBottom:12 }}>
-                  <div style={{ fontSize:11,color:C.textMuted,marginBottom:4 }}>Vincular a</div>
-                  <select style={{ background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.text,fontSize:12,width:"100%" }}
-                    value={r.tarjeta_id_sel||""}
-                    onChange={e=>setResultados(prev=>prev.map((x,i)=>i===ri?{...x,tarjeta_id_sel:e.target.value?Number(e.target.value):null}:x))}>
-                    <option value="">➕ Crear tarjeta nueva ({r.datos.nombre_tarjeta})</option>
-                    {cards.map(c=><option key={c.id} value={c.id}>💳 {c.name} •••• {c.last4}</option>)}
-                  </select>
-                </div>
-
-                {/* Resumen transacciones */}
-                <div style={{ fontSize:11,color:C.textMuted,marginBottom:8 }}>
-                  {r.datos.transacciones?.length||0} transacciones extraídas
-                  {" · "}{r.datos.transacciones?.filter(t=>t.tipo==="msi").length||0} MSI
-                </div>
-
-                {/* Tabla preview (primeras 8) */}
-                <div style={{ maxHeight:200,overflowY:"auto",borderRadius:8,border:`1px solid ${C.border}` }}>
-                  {(r.datos.transacciones||[]).slice(0,8).map((tx,ti)=>(
-                    <div key={ti} style={{ display:"grid",gridTemplateColumns:"80px 1fr 80px 60px",gap:8,padding:"6px 10px",borderBottom:`1px solid ${C.border}`,alignItems:"center" }}>
-                      <div style={{ fontSize:11,color:C.textMuted }}>{tx.fecha}</div>
-                      <div style={{ fontSize:12,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.descripcion}</div>
-                      <div style={{ fontSize:12,fontWeight:600,color:TIPO_COLOR[tx.tipo]||C.text,textAlign:"right" }}>{fmt(tx.monto)}</div>
-                      <div style={{ textAlign:"right" }}>
-                        <span style={{ fontSize:10,padding:"1px 6px",borderRadius:99,background:(TIPO_COLOR[tx.tipo]||C.text)+"22",color:TIPO_COLOR[tx.tipo]||C.text }}>
-                          {tx.tipo==="msi"?`${tx.msi_meses}MSI`:TIPO_LABEL[tx.tipo]||tx.tipo}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  {(r.datos.transacciones||[]).length>8&&(
-                    <div style={{ padding:"6px 10px",fontSize:11,color:C.textMuted,textAlign:"center" }}>
-                      +{r.datos.transacciones.length-8} más…
-                    </div>
-                  )}
-                </div>
-              </div>}
-            </div>
-          ))}
-
-          {/* ── LISTO ── */}
-          {paso==="listo"&&(
-            <div style={{ textAlign:"center",padding:"40px 0" }}>
-              <div style={{ fontSize:48,marginBottom:12 }}>✅</div>
-              <div style={{ color:C.text,fontSize:16,fontWeight:600,marginBottom:6 }}>Importación completada</div>
-              <div style={{ color:C.textMuted,fontSize:13 }}>Los datos ya están disponibles en el dashboard</div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding:"16px 24px",borderTop:`1px solid ${C.border}`,display:"flex",gap:10,justifyContent:"flex-end",flexShrink:0 }}>
-          {paso==="upload"&&<>
+          <div style={{ fontSize:11,color:C.textMuted,lineHeight:1.6,marginBottom:16 }}>
+            Soporta <strong style={{color:C.textDim}}>BBVA, Citibanamex, Santander, HSBC, Banorte</strong>. Extrae tarjeta, transacciones y MSI.
+          </div>
+          <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
             <button onClick={onClose} style={BtnS}>Cancelar</button>
-            <button onClick={parsear} disabled={!archivos.length}
+            <button onClick={()=>{ if(archivos.length){ onIniciar(archivos); onClose(); } }}
+              disabled={!archivos.length}
               style={{ ...BtnP,opacity:!archivos.length?0.45:1 }}>
               Analizar con Claude →
             </button>
-          </>}
-          {paso==="preview"&&<>
-            <button onClick={()=>{ setArchivos([]); setResultados([]); setPaso("upload"); }} style={BtnS}>Cambiar archivos</button>
-            <button onClick={guardar} style={BtnP}>Guardar todo</button>
-          </>}
-          {paso==="listo"&&<button onClick={onClose} style={BtnP}>Listo</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PANEL DE PROGRESO (flotante, accesible desde toda la app) ─────────────────
+function ProgresoPanel({ procesos, cards, onGuardar, onLimpiar, onClose }) {
+  const [tarjetaSel, setTarjetaSel] = useState({});   // { [id]: tarjeta_id }
+  const total     = procesos.length;
+  const listos    = procesos.filter(p=>p.estado==="listo").length;
+  const errores   = procesos.filter(p=>p.estado==="error").length;
+  const corriendo = procesos.some(p=>p.estado==="procesando"||p.estado==="pendiente");
+  const fmt = n => "$"+Number(n||0).toLocaleString("es-MX",{maximumFractionDigits:0});
+
+  const ST = {
+    listo:     { icon:"✅", color:C.accent,   bg:C.accentDim },
+    error:     { icon:"❌", color:C.red,      bg:C.redDim    },
+    procesando:{ icon:"⏳", color:C.yellow,   bg:C.yellowDim },
+    pendiente: { icon:"🔵", color:C.textMuted,bg:C.surface   },
+    guardado:  { icon:"💾", color:C.blue,     bg:C.blueDim   },
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:700,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",padding:"70px 24px 0",backdropFilter:"blur(2px)" }}
+      onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{ width:460,maxHeight:"calc(100vh - 100px)",background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,display:"flex",flexDirection:"column",overflow:"hidden",animation:"slideUp .2s ease",boxShadow:"0 20px 60px rgba(0,0,0,0.6)" }}>
+        {/* Header */}
+        <div style={{ padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0 }}>
+          <div>
+            <div style={{ fontSize:14,fontWeight:600,color:C.text }}>Importación de estados</div>
+            <div style={{ fontSize:12,color:C.textMuted,marginTop:2 }}>
+              {corriendo ? `Analizando… ${listos}/${total} completado${listos!==1?"s":""}` : `${listos} listo${listos!==1?"s":""} · ${errores} error${errores!==1?"es":""}`}
+            </div>
+          </div>
+          {/* Barra global */}
+          <div style={{ width:100 }}>
+            <div style={{ background:C.border,borderRadius:99,height:6,overflow:"hidden" }}>
+              <div style={{ height:"100%",background:errores>0&&!corriendo?C.red:C.accent,borderRadius:99,transition:"width .4s",width:`${total>0?(listos+errores)/total*100:0}%` }}/>
+            </div>
+            <div style={{ fontSize:10,color:C.textMuted,textAlign:"right",marginTop:2 }}>{listos+errores}/{total}</div>
+          </div>
+        </div>
+
+        {/* Lista archivos */}
+        <div style={{ overflowY:"auto",flex:1,padding:"8px 0" }}>
+          {procesos.map((p,i)=>{
+            const st = ST[p.estado]||ST.pendiente;
+            const sel = tarjetaSel[p.id] ?? p.tarjeta_existente?.id ?? "";
+            return (
+              <div key={p.id} style={{ padding:"10px 20px",borderBottom:`1px solid ${C.border}` }}>
+                <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:p.estado==="listo"?8:0 }}>
+                  <span style={{ fontSize:16,flexShrink:0 }}>{st.icon}</span>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:12,fontWeight:500,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{p.nombre}</div>
+                    {p.estado==="listo"&&p.datos&&(
+                      <div style={{ fontSize:11,color:C.textMuted,marginTop:1 }}>
+                        {p.datos.nombre_tarjeta} · {p.datos.banco} · {p.datos.transacciones?.length||0} tx
+                        {(p.datos.transacciones?.filter(t=>t.tipo==="msi").length||0)>0 && ` · ${p.datos.transacciones.filter(t=>t.tipo==="msi").length} MSI`}
+                      </div>
+                    )}
+                    {p.estado==="procesando"&&<div style={{ fontSize:11,color:C.yellow }}>Analizando con Claude…</div>}
+                    {p.estado==="pendiente"&&<div style={{ fontSize:11,color:C.textMuted }}>En cola…</div>}
+                    {p.estado==="guardado"&&<div style={{ fontSize:11,color:C.blue }}>Guardado ✓</div>}
+                  </div>
+                </div>
+                {/* Error */}
+                {p.estado==="error"&&(
+                  <div style={{ marginTop:4,padding:"6px 10px",background:C.redDim,borderRadius:8,fontSize:11,color:C.red,fontFamily:"'IBM Plex Mono',monospace",wordBreak:"break-all" }}>
+                    {p.error}
+                  </div>
+                )}
+                {/* Card selector para los listos (no guardados aún) */}
+                {p.estado==="listo"&&(
+                  <select style={{ width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 8px",color:C.text,fontSize:11,cursor:"pointer" }}
+                    value={sel}
+                    onChange={e=>setTarjetaSel(prev=>({...prev,[p.id]:e.target.value?Number(e.target.value):null}))}>
+                    <option value="">➕ Crear tarjeta nueva ({p.datos?.nombre_tarjeta})</option>
+                    {cards.map(c=><option key={c.id} value={c.id}>💳 {c.name} •••• {c.last4}</option>)}
+                  </select>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding:"12px 20px",borderTop:`1px solid ${C.border}`,display:"flex",gap:8,justifyContent:"flex-end",flexShrink:0 }}>
+          {!corriendo&&listos>0&&(
+            <button onClick={()=>onGuardar(procesos.filter(p=>p.estado==="listo").map(p=>({
+              ...p, tarjeta_id_sel: tarjetaSel[p.id]??p.tarjeta_existente?.id??null
+            })))} style={BtnP}>
+              💾 Guardar {listos} archivo{listos!==1?"s":""}
+            </button>
+          )}
+          {!corriendo&&<button onClick={onLimpiar} style={BtnS}>Limpiar</button>}
+          {corriendo&&<div style={{ color:C.textMuted,fontSize:12,alignSelf:"center" }}>El análisis sigue en segundo plano…</div>}
         </div>
       </div>
     </div>
@@ -1025,7 +958,7 @@ function ImportarEstadoModal({ cards, onDone, onClose }) {
 }
 
 // ── CREDIT CARDS ──────────────────────────────────────────────────────────────
-function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onImportDone }) {
+function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onImportDone, onIniciarImport }) {
   const [selected,setSelected]=useState(null);
   const [editCard,setEditCard]=useState(null);
   const [adding,setAdding]=useState(false);
@@ -1077,7 +1010,7 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
             <div style={{ color:C.textMuted, fontSize:14, fontFamily:F, marginBottom:20 }}>No tienes tarjetas registradas.</div>
             <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
               <button onClick={()=>setAdding(true)} style={BtnP}>+ Agregar tarjeta</button>
-              <button onClick={()=>setImportandoEstado(true)} style={BtnP}>📄 Importar estados PDF</button>
+              <button onClick={()=>setImportandoEstado(true)} style={BtnP}>+ Importar estados PDF</button>
             </div>
           </div>
         : <>
@@ -1137,7 +1070,7 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
             </SCard>}
             <div style={{ display:"flex", gap:10 }}>
               <button onClick={()=>setAdding(true)} style={BtnP}>+ Agregar tarjeta</button>
-              <button onClick={()=>setImportandoEstado(true)} style={BtnP}>📄 Importar estados PDF</button>
+              <button onClick={()=>setImportandoEstado(true)} style={BtnP}>+ Importar estados PDF</button>
             </div>
           </>
       }
@@ -1154,13 +1087,12 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
       />}
 
       {importandoEstado&&<ImportarEstadoModal
-        cards={cards}
-        onDone={()=>{ setImportandoEstado(false); onImportDone(); }}
+        onIniciar={(archivos)=>{ onIniciarImport(archivos); setImportandoEstado(false); }}
         onClose={()=>setImportandoEstado(false)}
       />}
 
       {/* Zona de peligro */}
-      <div style={{ marginTop:24, padding:"16px 20px", background:C.redDim, border:`1px solid ${C.red}30`, borderRadius:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      {cards.length>0&&<div style={{ marginTop:24, padding:"16px 20px", background:C.redDim, border:`1px solid ${C.red}30`, borderRadius:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
           <div style={{ color:C.red, fontSize:13, fontWeight:600, fontFamily:F }}>Limpiar todos mis datos</div>
           <div style={{ color:C.textMuted, fontSize:11, fontFamily:F, marginTop:2 }}>Borra transacciones, planes MSI y tarjetas. No se puede deshacer.</div>
@@ -1169,7 +1101,7 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
           style={{ ...BtnS, color:C.red, borderColor:C.red+"55", fontSize:12, padding:"6px 16px", opacity:resetting?0.5:1, flexShrink:0 }}>
           {resetting?"Borrando…":"Limpiar datos"}
         </button>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -1346,10 +1278,12 @@ function MSIPlans({ plans, cards }) {
 }
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
-function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards, onDeleteMsi, onDeleteAhorro }) {
+function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards, onDeleteMsi, onDeleteAhorro, onSaveIncome }) {
   const [savingsGoalPct, setSavingsGoalPct] = useState(20);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState("20");
+  const [editingIncome, setEditingIncome] = useState(false);
+  const [incomeInput, setIncomeInput] = useState(String(income));
   const INCOME    = income;
   const totalFixed = fixedItems.reduce((s,f)=>s+f.amt, 0);
   const totalMSI   = msiPlans.filter(p=>p.paid<p.months).reduce((s,p)=>s+p.mo, 0);
@@ -1441,8 +1375,27 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
 
       {/* ── 1. KPI BAR ───────────────────────────────────────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
+        {/* Ingreso — editable */}
+        <div style={{ background:C.card, border:`1px solid ${editingIncome?C.accent:C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6, cursor:onSaveIncome&&!editingIncome?"pointer":"default", transition:"border-color .15s" }}
+          onClick={()=>{ if(onSaveIncome&&!editingIncome){ setIncomeInput(String(income)); setEditingIncome(true); } }}
+          title={onSaveIncome&&!editingIncome?"Editar ingreso mensual":undefined}>
+          <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em", display:"flex", alignItems:"center", gap:6 }}>
+            Ingreso mensual {onSaveIncome&&!editingIncome&&<span style={{ color:C.accent, fontSize:10 }}>✏️</span>}
+          </span>
+          {editingIncome
+            ? <div style={{ display:"flex", alignItems:"center", gap:6 }} onClick={e=>e.stopPropagation()}>
+                <input autoFocus value={incomeInput} onChange={e=>setIncomeInput(e.target.value)} type="number"
+                  onKeyDown={e=>{ if(e.key==="Enter"&&incomeInput){ onSaveIncome(parseFloat(incomeInput)); setEditingIncome(false); } if(e.key==="Escape") setEditingIncome(false); }}
+                  style={{ flex:1, background:C.surface, border:`1px solid ${C.accent}`, borderRadius:7, padding:"4px 8px", color:C.accent, fontFamily:F, fontSize:18, fontWeight:700, outline:"none", minWidth:0 }}/>
+                <button onClick={()=>{ if(incomeInput){ onSaveIncome(parseFloat(incomeInput)); setEditingIncome(false); } }}
+                  style={{ ...BtnP, padding:"4px 10px", fontSize:12, flexShrink:0 }}>✓</button>
+                <button onClick={()=>setEditingIncome(false)}
+                  style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textMuted, fontSize:16, flexShrink:0 }}>✕</button>
+              </div>
+            : <span style={{ color:C.accent, fontSize:26, fontWeight:700, fontFamily:F, lineHeight:1.1 }}>{fmt(INCOME)}</span>
+          }
+        </div>
         {[
-          { lbl:"Ingreso mensual",  val:fmt(INCOME),     col:C.accent,  sub:null },
           { lbl:"Gastos fijos",     val:fmt(totalFixed), col:C.red,     sub:INCOME>0?`${Math.round(totalFixed/INCOME*100)}% del ingreso`:null },
           { lbl:"MSI / mes",        val:fmt(totalMSI),   col:C.yellow,  sub:INCOME>0?`${Math.round(totalMSI/INCOME*100)}% del ingreso`:null },
           { lbl:"Gastado variable", val:fmt(gastoVar),   col:C.blue,    sub:INCOME>0?`${Math.round(gastoVar/INCOME*100)}% del ingreso`:null },
@@ -2690,6 +2643,8 @@ function Dashboard({ logout }) {
   const [loading,setLoading]=useState(true);
   const [apiError,setApiError]=useState(null);
   const [onboarding,setOnboarding]=useState(false);
+  const [procesos,setProcesos]=useState([]);
+  const [mostrarProgreso,setMostrarProgreso]=useState(false);
 
   const cargarDatos=()=>{
     const periodo=periodoActual();
@@ -2738,6 +2693,57 @@ function Dashboard({ logout }) {
     });
   };
 
+  const iniciarImport = async (archivos) => {
+    const nuevos = archivos.map((f, i) => ({
+      id: Date.now() + i,
+      nombre: f.name,
+      estado: "pendiente",
+      datos: null,
+      error: null,
+      tarjeta_existente: null,
+    }));
+    setProcesos(prev => [...prev, ...nuevos]);
+    setMostrarProgreso(true);
+    for (let i = 0; i < archivos.length; i++) {
+      const proc = nuevos[i];
+      setProcesos(prev => prev.map(p => p.id === proc.id ? { ...p, estado: "procesando" } : p));
+      try {
+        const b64 = await pdfABase64(archivos[i]);
+        const datos = await API.parsearEstado(b64);
+        const tarjeta_existente = cards.find(c => datos.last4 && c.last4 === datos.last4) ?? null;
+        setProcesos(prev => prev.map(p => p.id === proc.id ? { ...p, estado: "listo", datos, tarjeta_existente } : p));
+      } catch (e) {
+        setProcesos(prev => prev.map(p => p.id === proc.id ? { ...p, estado: "error", error: e.message } : p));
+      }
+    }
+  };
+
+  const guardarImportados = async (items) => {
+    for (const item of items) {
+      try {
+        await API.importarEstado(item.datos, item.tarjeta_id_sel ?? null);
+        setProcesos(prev => prev.map(p => p.id === item.id ? { ...p, estado: "guardado" } : p));
+      } catch (e) {
+        setProcesos(prev => prev.map(p => p.id === item.id ? { ...p, estado: "error", error: e.message } : p));
+      }
+    }
+    cargarDatos();
+  };
+
+  const limpiarProcesos = () => { setProcesos([]); setMostrarProgreso(false); };
+
+  const saveIncome = async (monto) => {
+    try {
+      const ingresos = await API.getIngresos();
+      if (ingresos && ingresos.length > 0) {
+        await API.putIngreso(ingresos[0].id, { concepto: ingresos[0].concepto, monto });
+      } else {
+        await API.postIngreso({ concepto: "Ingreso mensual", monto });
+      }
+      setIncome(monto);
+    } catch (e) { console.error("Error actualizando ingreso:", e); }
+  };
+
   if(onboarding) return <OnboardingWizard defaultGroupBudgets={groupBudgets} onDone={()=>{ setOnboarding(false); cargarDatos(); }}/>;
 
   const alerts=computeAlerts(txs,fixedItems,income,msiPlans);
@@ -2779,6 +2785,13 @@ function Dashboard({ logout }) {
           </button>; })}
         </nav>
       </aside>}
+      {mostrarProgreso&&<ProgresoPanel
+        procesos={procesos}
+        cards={cards}
+        onGuardar={guardarImportados}
+        onLimpiar={limpiarProcesos}
+        onClose={()=>setMostrarProgreso(false)}
+      />}
       <main style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <header style={{ padding:"16px 28px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:14, background:C.surface, flexShrink:0 }}>
           <button onClick={()=>setSidebar(o=>!o)} style={{ width:36, height:36, borderRadius:10, background:"transparent", border:`1px solid ${C.border}`, cursor:"pointer", color:C.textDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }} onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textDim;}}>☰</button>
@@ -2786,6 +2799,21 @@ function Dashboard({ logout }) {
             <h1 style={{ color:C.text, fontSize:18, fontWeight:700, letterSpacing:"-0.025em", fontFamily:F }}>{TABS.find(t=>t.id===tab)?.label}</h1>
             <p style={{ color:C.textMuted, fontSize:12, marginTop:2, fontFamily:F }}>Mayo 2026 · {txs.length} movimientos</p>
           </div>
+          {procesos.length>0&&(()=>{
+            const activos=procesos.filter(p=>p.estado==="procesando"||p.estado==="pendiente").length;
+            const errores=procesos.filter(p=>p.estado==="error").length;
+            const col=activos>0?C.yellow:errores>0?C.red:C.accent;
+            return (
+              <button onClick={()=>setMostrarProgreso(o=>!o)}
+                style={{ display:"flex",alignItems:"center",gap:7,padding:"6px 14px",borderRadius:10,background:mostrarProgreso?`${col}18`:"transparent",border:`1px solid ${mostrarProgreso?col:C.border}`,cursor:"pointer",color:mostrarProgreso?col:C.textDim,fontSize:13,fontFamily:F,transition:"all .15s",flexShrink:0 }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=col;e.currentTarget.style.color=col;}}
+                onMouseLeave={e=>{ if(!mostrarProgreso){e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textDim;} }}>
+                <span style={{ fontSize:14 }}>{activos>0?"⏳":errores>0?"❌":"✅"}</span>
+                <span>Progreso</span>
+                <span style={{ background:col,color:C.bg,borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 6px",minWidth:18,textAlign:"center",lineHeight:"16px" }}>{procesos.length}</span>
+              </button>
+            );
+          })()}
           <button onClick={logout} title="Cerrar sesión"
             style={{ width:36, height:36, borderRadius:10, background:"transparent", border:`1px solid ${C.border}`, cursor:"pointer", color:C.textDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red;e.currentTarget.style.color=C.red;}}
@@ -2794,6 +2822,7 @@ function Dashboard({ logout }) {
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px 80px", display:"flex", flexDirection:"column", gap:0 }}>
           {tab==="estado"       &&<Estado        txs={txs} groupBudgets={groupBudgets} fixedItems={fixedItems} income={income} msiPlans={msiPlans} prevSavings={prevSavings} cards={cards}
             onRefresh={cargarDatos}
+            onSaveIncome={saveIncome}
             onDeleteMsi={async(id)=>{ console.log("[deleteMSI] id=",id); try{await API.deleteMSI(id); setMsiPlans(prev=>prev.filter(p=>p.id!==id));}catch(e){console.error("[deleteMSI] ERROR:",e); setApiError("Error eliminando MSI: "+e.message);} }}
             onDeleteAhorro={async(id)=>{ console.log("[deleteAhorro] id=",id); try{await API.deleteGasto(id); setTxs(prev=>prev.filter(t=>t.id!==id));}catch(e){console.error("[deleteAhorro] ERROR:",e); setApiError("Error eliminando ahorro: "+e.message);} }}/>}
           {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
@@ -2808,7 +2837,7 @@ function Dashboard({ logout }) {
               }}
               onDelete={async(id)=>{ console.log("[deleteFijo] id=",id); try{ await API.deleteFijo(id); setFixedItems(p=>p.filter(f=>f.id!==id)); }catch(e){console.error("[deleteFijo] ERROR:",e); setApiError("Error eliminando gasto fijo: "+e.message);} }}
             /></>}
-          {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} setMsiPlans={setMsiPlans} onImportDone={cargarDatos}/>}
+          {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} setMsiPlans={setMsiPlans} onImportDone={cargarDatos} onIniciarImport={iniciarImport}/>}
           {tab==="budget"       &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
             <TabPresupuesto
               presupuestoData={[]}
