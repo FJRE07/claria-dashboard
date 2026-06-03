@@ -1655,18 +1655,11 @@ function SeccionPresupuesto({ porCategoria }) {
   const budgetGrupo = { Esencial:0, Importante:0, Flexible:0, Prescindible:0 };
   userCats.forEach(c=>{ if(c.prioridad in budgetGrupo) budgetGrupo[c.prioridad]+=Number(c.monto)||0; });
 
-  const grpsConDatos = PRIORIDADES_ORD.filter(g=>budgetGrupo[g]>0||(userCats.some(c=>c.prioridad===g)));
-  const cols = Math.min(grpsConDatos.length||4, 4);
-
   return (
     <div style={{ background:C.card, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"14px 16px" }}>
       <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em", marginBottom:14 }}>presupuesto vs gasto real</div>
-      {grpsConDatos.length===0
-        ? <div style={{ fontSize:13, color:C.muted, textAlign:"center", padding:"16px 0" }}>
-            Define tus categorías en el tab <strong style={{color:C.textDim}}>Presupuestos</strong> para ver el comparativo.
-          </div>
-        : <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`, gap:16 }}>
-            {grpsConDatos.map(grp=>{
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16 }}>
+        {PRIORIDADES_ORD.map(grp=>{
               const color   = GRP_COLOR[grp];
               const budget  = budgetGrupo[grp];
               const gasto   = gastoGrupo[grp];
@@ -1696,9 +1689,8 @@ function SeccionPresupuesto({ porCategoria }) {
                   {grpCats.length===0&&<div style={{ fontSize:11, color:C.muted }}>Sin categorías asignadas</div>}
                 </div>
               );
-            })}
-          </div>
-      }
+        })}
+      </div>
     </div>
   );
 }
