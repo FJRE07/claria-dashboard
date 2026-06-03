@@ -1670,12 +1670,12 @@ function SeccionPresupuesto({ porCategoria }) {
                 <div key={grp} style={{ background:`${excede?"#E24B4A":color}12`, border:`1px solid ${excede?"#E24B4A":color}40`, borderRadius:10, padding:"10px 12px" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
                     <div style={{ fontSize:14, fontWeight:700, color }}>{grp}</div>
-                    {budget>0&&<div style={{ textAlign:"right" }}>
+                    <div style={{ textAlign:"right" }}>
                       <div style={{ fontSize:18, fontWeight:700, color, lineHeight:1 }}>
                         ${gasto.toLocaleString("es-MX",{maximumFractionDigits:0})}
                       </div>
-                      <div style={{ fontSize:11, color:C.muted }}>de ${budget.toLocaleString("es-MX",{maximumFractionDigits:0})}</div>
-                    </div>}
+                      {budget>0&&<div style={{ fontSize:11, color:C.muted }}>de ${budget.toLocaleString("es-MX",{maximumFractionDigits:0})}</div>}
+                    </div>
                   </div>
                   <div style={{ height:5, background:C.bg2, borderRadius:3, overflow:"hidden", marginBottom:8 }}>
                     <div style={{ height:"100%", width:`${pct}%`, background:excede?"#E24B4A":color, borderRadius:3 }}/>
