@@ -2252,12 +2252,7 @@ function SeccionAhorroMSI({ dash }) {
           <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:".05em" }}>distribución de crédito</div>
           <div style={{ display:"flex", gap:6 }}>
             <button onClick={()=>setAddModoMSI(true)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:"none", background:"#185FA5", color:"#fff", cursor:"pointer", fontWeight:500 }}>+ Agregar</button>
-            <button onClick={async()=>{ await API.consolidarMSI(); setLocalPlanes(p=>{ /* refrescar en siguiente carga */ return p; }); window.location.reload(); }}
-              style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:`1px solid ${C.border}`, background:"transparent", color:C.textMuted, cursor:"pointer" }}
-              title="Elimina duplicados de MSI conservando el más reciente">
-              Consolidar
-            </button>
-            <button onClick={()=>setEditModoMSI(m=>!m)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:`1px solid ${editModoMSI?C.accent:C.border}`, background:editModoMSI?C.accentDim:"transparent", color:editModoMSI?C.accent:C.textDim, cursor:"pointer" }}>{editModoMSI?"Listo":"Gestionar"}</button>
+<button onClick={()=>setEditModoMSI(m=>!m)} style={{ padding:"4px 10px", borderRadius:7, fontSize:11, border:`1px solid ${editModoMSI?C.accent:C.border}`, background:editModoMSI?C.accentDim:"transparent", color:editModoMSI?C.accent:C.textDim, cursor:"pointer" }}>{editModoMSI?"Listo":"Gestionar"}</button>
           </div>
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:10 }}>
