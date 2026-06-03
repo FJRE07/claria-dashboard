@@ -775,12 +775,229 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
   );
 }
 
+// ── IMPORTAR ESTADOS DE CUENTA PDF ───────────────────────────────────────────
+const TIPO_COLOR = { cargo:"#FF4560", abono:"#00D4A0", msi:"#FFBA2C" };
+const TIPO_LABEL = { cargo:"Cargo", abono:"Abono", msi:"MSI" };
+
+function ImportarEstadoModal({ cards, onDone, onClose }) {
+  const [paso, setPaso]         = useState("upload");   // upload | parsing | preview | guardando | listo
+  const [archivos, setArchivos] = useState([]);
+  const [resultados, setResultados] = useState([]);     // [{ archivo, datos, tarjeta_existente, tarjeta_id_sel, error }]
+  const [err, setErr]           = useState("");
+
+  const pdfABase64 = (file) => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+
+  const parsear = async () => {
+    if (!archivos.length) return;
+    setPaso("parsing"); setErr("");
+    const resultados = [];
+    for (const file of archivos) {
+      try {
+        const b64  = await pdfABase64(file);
+        const resp = await API.parsearEstado(b64);
+        resultados.push({
+          archivo: file.name,
+          datos:   resp.datos,
+          tarjeta_existente: resp.tarjeta_existente,
+          tarjeta_id_sel: resp.tarjeta_existente?.id ?? null,
+          error: null,
+        });
+      } catch (e) {
+        resultados.push({ archivo: file.name, datos: null, error: e.message });
+      }
+    }
+    setResultados(resultados);
+    setPaso("preview");
+  };
+
+  const guardar = async () => {
+    setPaso("guardando");
+    for (const r of resultados) {
+      if (!r.datos) continue;
+      try {
+        await API.importarEstado(r.datos, r.tarjeta_id_sel || undefined);
+      } catch (e) {
+        console.error("importar:", r.archivo, e.message);
+      }
+    }
+    setPaso("listo");
+    onDone();
+  };
+
+  const fmt = n => "$"+Number(n||0).toLocaleString("es-MX",{maximumFractionDigits:0});
+
+  const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)" };
+  const box     = { width:640,maxHeight:"86vh",background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,display:"flex",flexDirection:"column",overflow:"hidden",animation:"slideUp .25s ease" };
+
+  return (
+    <div onClick={onClose} style={overlay}>
+      <div onClick={e=>e.stopPropagation()} style={box}>
+        {/* Header */}
+        <div style={{ padding:"20px 24px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0 }}>
+          <div>
+            <div style={{ fontSize:16,fontWeight:600,color:C.text }}>Importar estados de cuenta</div>
+            <div style={{ fontSize:12,color:C.textMuted,marginTop:2 }}>
+              {paso==="upload"   && "Sube uno o varios PDFs — crédito o débito"}
+              {paso==="parsing"  && "Analizando con Claude…"}
+              {paso==="preview"  && "Revisa los datos antes de guardar"}
+              {paso==="guardando"&& "Guardando en la base de datos…"}
+              {paso==="listo"    && "Importación completada"}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent",border:"none",cursor:"pointer",color:C.textDim,fontSize:18 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY:"auto",padding:"20px 24px",flex:1 }}>
+
+          {/* ── UPLOAD ── */}
+          {paso==="upload"&&<>
+            <div style={{ border:`2px dashed ${C.border}`,borderRadius:12,padding:"32px 24px",textAlign:"center",background:C.card,marginBottom:16 }}>
+              <div style={{ fontSize:32,marginBottom:8 }}>📄</div>
+              <div style={{ color:C.textDim,fontSize:13,marginBottom:12 }}>Arrastra los PDFs aquí o haz clic para seleccionar</div>
+              <input type="file" accept=".pdf" multiple onChange={e=>setArchivos(Array.from(e.target.files))}
+                style={{ color:C.text,fontSize:13,fontFamily:F }}/>
+              {archivos.length>0&&(
+                <div style={{ marginTop:14,display:"flex",flexDirection:"column",gap:6 }}>
+                  {archivos.map((f,i)=>(
+                    <div key={i} style={{ display:"flex",alignItems:"center",gap:8,background:C.accentDim,borderRadius:8,padding:"6px 12px" }}>
+                      <span style={{ fontSize:14 }}>📄</span>
+                      <span style={{ color:C.accent,fontSize:12,flex:1,textAlign:"left" }}>{f.name}</span>
+                      <span style={{ color:C.textMuted,fontSize:11 }}>{(f.size/1024).toFixed(0)} KB</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize:12,color:C.textMuted,lineHeight:1.6 }}>
+              Soporta estados de <strong style={{color:C.textDim}}>BBVA, Citibanamex, Santander, HSBC, Banorte</strong>.<br/>
+              Se extraen: datos de la tarjeta, todas las transacciones del mes y compras a MSI.
+            </div>
+            {err&&<div style={{ color:C.red,fontSize:12,marginTop:10 }}>{err}</div>}
+          </>}
+
+          {/* ── PARSING ── */}
+          {paso==="parsing"&&(
+            <div style={{ textAlign:"center",padding:"40px 0" }}>
+              <div style={{ width:44,height:44,borderRadius:"50%",border:`3px solid ${C.border}`,borderTopColor:C.accent,animation:"spin 0.8s linear infinite",margin:"0 auto 16px" }}/>
+              <div style={{ color:C.textDim,fontSize:14 }}>Claude está analizando {archivos.length} PDF{archivos.length>1?"s":""}…</div>
+              <div style={{ color:C.textMuted,fontSize:12,marginTop:6 }}>Esto puede tomar 10–30 segundos por archivo</div>
+            </div>
+          )}
+
+          {/* ── PREVIEW ── */}
+          {paso==="preview"&&resultados.map((r,ri)=>(
+            <div key={ri} style={{ marginBottom:20,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden" }}>
+              {/* Cabecera resultado */}
+              <div style={{ background:C.card,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                  <span style={{ fontSize:14 }}>{r.error?"❌":"✅"}</span>
+                  <span style={{ color:C.text,fontSize:13,fontWeight:500 }}>{r.archivo}</span>
+                </div>
+                {r.datos&&<span style={{ fontSize:11,color:C.textMuted }}>{r.datos.tipo?.toUpperCase()} · {r.datos.banco}</span>}
+              </div>
+
+              {r.error&&<div style={{ padding:"12px 16px",color:C.red,fontSize:12 }}>{r.error}</div>}
+
+              {r.datos&&<div style={{ padding:"12px 16px" }}>
+                {/* Info tarjeta */}
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14 }}>
+                  {[
+                    ["Tarjeta",    r.datos.nombre_tarjeta||"—"],
+                    ["Banco",      r.datos.banco||"—"],
+                    ["Last4",      r.datos.last4||"—"],
+                    ["Límite",     r.datos.limite?fmt(r.datos.limite):"N/A"],
+                  ].map(([l,v])=>(
+                    <div key={l} style={{ background:C.surface,borderRadius:8,padding:"8px 10px" }}>
+                      <div style={{ fontSize:10,color:C.textMuted,textTransform:"uppercase",marginBottom:2 }}>{l}</div>
+                      <div style={{ fontSize:13,fontWeight:600,color:C.text }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Vincular a tarjeta existente */}
+                <div style={{ marginBottom:12 }}>
+                  <div style={{ fontSize:11,color:C.textMuted,marginBottom:4 }}>Vincular a</div>
+                  <select style={{ background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.text,fontSize:12,width:"100%" }}
+                    value={r.tarjeta_id_sel||""}
+                    onChange={e=>setResultados(prev=>prev.map((x,i)=>i===ri?{...x,tarjeta_id_sel:e.target.value?Number(e.target.value):null}:x))}>
+                    <option value="">➕ Crear tarjeta nueva ({r.datos.nombre_tarjeta})</option>
+                    {cards.map(c=><option key={c.id} value={c.id}>💳 {c.name} •••• {c.last4}</option>)}
+                  </select>
+                </div>
+
+                {/* Resumen transacciones */}
+                <div style={{ fontSize:11,color:C.textMuted,marginBottom:8 }}>
+                  {r.datos.transacciones?.length||0} transacciones extraídas
+                  {" · "}{r.datos.transacciones?.filter(t=>t.tipo==="msi").length||0} MSI
+                </div>
+
+                {/* Tabla preview (primeras 8) */}
+                <div style={{ maxHeight:200,overflowY:"auto",borderRadius:8,border:`1px solid ${C.border}` }}>
+                  {(r.datos.transacciones||[]).slice(0,8).map((tx,ti)=>(
+                    <div key={ti} style={{ display:"grid",gridTemplateColumns:"80px 1fr 80px 60px",gap:8,padding:"6px 10px",borderBottom:`1px solid ${C.border}`,alignItems:"center" }}>
+                      <div style={{ fontSize:11,color:C.textMuted }}>{tx.fecha}</div>
+                      <div style={{ fontSize:12,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.descripcion}</div>
+                      <div style={{ fontSize:12,fontWeight:600,color:TIPO_COLOR[tx.tipo]||C.text,textAlign:"right" }}>{fmt(tx.monto)}</div>
+                      <div style={{ textAlign:"right" }}>
+                        <span style={{ fontSize:10,padding:"1px 6px",borderRadius:99,background:(TIPO_COLOR[tx.tipo]||C.text)+"22",color:TIPO_COLOR[tx.tipo]||C.text }}>
+                          {tx.tipo==="msi"?`${tx.msi_meses}MSI`:TIPO_LABEL[tx.tipo]||tx.tipo}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {(r.datos.transacciones||[]).length>8&&(
+                    <div style={{ padding:"6px 10px",fontSize:11,color:C.textMuted,textAlign:"center" }}>
+                      +{r.datos.transacciones.length-8} más…
+                    </div>
+                  )}
+                </div>
+              </div>}
+            </div>
+          ))}
+
+          {/* ── LISTO ── */}
+          {paso==="listo"&&(
+            <div style={{ textAlign:"center",padding:"40px 0" }}>
+              <div style={{ fontSize:48,marginBottom:12 }}>✅</div>
+              <div style={{ color:C.text,fontSize:16,fontWeight:600,marginBottom:6 }}>Importación completada</div>
+              <div style={{ color:C.textMuted,fontSize:13 }}>Los datos ya están disponibles en el dashboard</div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding:"16px 24px",borderTop:`1px solid ${C.border}`,display:"flex",gap:10,justifyContent:"flex-end",flexShrink:0 }}>
+          {paso==="upload"&&<>
+            <button onClick={onClose} style={BtnS}>Cancelar</button>
+            <button onClick={parsear} disabled={!archivos.length}
+              style={{ ...BtnP,opacity:!archivos.length?0.45:1 }}>
+              Analizar con Claude →
+            </button>
+          </>}
+          {paso==="preview"&&<>
+            <button onClick={()=>{ setArchivos([]); setResultados([]); setPaso("upload"); }} style={BtnS}>Cambiar archivos</button>
+            <button onClick={guardar} style={BtnP}>Guardar todo</button>
+          </>}
+          {paso==="listo"&&<button onClick={onClose} style={BtnP}>Listo</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── CREDIT CARDS ──────────────────────────────────────────────────────────────
 function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onImportDone }) {
   const [selected,setSelected]=useState(null);
   const [editCard,setEditCard]=useState(null);
   const [adding,setAdding]=useState(false);
   const [importCard,setImportCard]=useState(null);
+  const [importandoEstado,setImportandoEstado]=useState(false);
   const [resetting,setResetting]=useState(false);
 
   const handleReset=async()=>{
@@ -822,6 +1039,14 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
 
   return (
     <div>
+      {/* Botón principal de importación PDF */}
+      <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16 }}>
+        <button onClick={()=>setImportandoEstado(true)}
+          style={{ ...BtnP, background:"linear-gradient(135deg,#7B3F00,#C06000)", display:"flex", alignItems:"center", gap:8, fontSize:13 }}>
+          📄 Importar estados de cuenta PDF
+        </button>
+      </div>
+
       {cards.length===0
         ? <div style={{ textAlign:"center", padding:"60px 0" }}>
             <div style={{ color:C.textMuted, fontSize:14, fontFamily:F, marginBottom:20 }}>No tienes tarjetas registradas.</div>
@@ -895,6 +1120,12 @@ function CreditCards({ txs, cards, setCards, setTxs, msiPlans, setMsiPlans, onIm
         card={importCard}
         onDone={()=>{ setImportCard(null); onImportDone(); }}
         onClose={()=>setImportCard(null)}
+      />}
+
+      {importandoEstado&&<ImportarEstadoModal
+        cards={cards}
+        onDone={()=>{ setImportandoEstado(false); onImportDone(); }}
+        onClose={()=>setImportandoEstado(false)}
       />}
 
       {/* Zona de peligro */}
