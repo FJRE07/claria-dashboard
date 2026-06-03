@@ -1877,10 +1877,11 @@ function SeccionAhorroMSI({ dash }) {
           <span>${acumulado.toLocaleString("es-MX")} acumulados</span>
           <span>faltan ${Math.max(0,metaAnual-acumulado).toLocaleString("es-MX")}</span>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:C.border, borderRadius:8, overflow:"hidden", marginBottom:14 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:1, background:C.border, borderRadius:8, overflow:"hidden", marginBottom:14 }}>
           {[
-            { label:"ahorro mensual",       val:`$${ahorroMensual.toLocaleString("es-MX")}`, color:"#1D9E75" },
-            { label:`meses a fin de año`,   val:`${mesesAFin} meses`,                        color:C.text },
+            { label:"ahorro del mes",        val:`$${acumulado.toLocaleString("es-MX")}`,    color:"#1D9E75" },
+            { label:"meses a fin de año",    val:`${mesesAFin} meses`,                       color:C.text    },
+            { label:"posible ahorro extra",  val:`$${Math.max(0,libre).toLocaleString("es-MX")}`, color:libre>0?"#185FA5":C.muted },
           ].map(k=>(
             <div key={k.label} style={{ background:C.bg2, padding:"8px 12px" }}>
               <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:".04em", marginBottom:2 }}>{k.label}</div>
