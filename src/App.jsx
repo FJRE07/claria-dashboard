@@ -804,8 +804,8 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
                            :<span style={{ color:C.textMuted, fontSize:12 }}>—</span>}
                     </div>
                     <div style={{ textAlign:"center" }}><span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600,
-  background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":tx.src==="estado"?C.accentDim:C.blueDim,
-  color:tx.src==="whatsapp"?C.wa:tx.src==="estado"?C.accent:C.blue }}>
+  background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":tx.src==="estado"?"rgba(148,163,184,0.12)":C.blueDim,
+  color:tx.src==="whatsapp"?C.wa:tx.src==="estado"?C.textDim:C.blue }}>
   {tx.src==="whatsapp"?"WA":tx.src==="estado"?"PDF":"Man"}
 </span></div>
                     <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
@@ -1348,7 +1348,7 @@ function MSIPlans({ plans, cards }) {
 }
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
-function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards, onDeleteMsi, onDeleteAhorro, onSaveIncome }) {
+function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, cards, onDeleteMsi, onDeleteAhorro, onSaveIncome, onRefresh }) {
   const [savingsGoalPct, setSavingsGoalPct] = useState(20);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState("20");
