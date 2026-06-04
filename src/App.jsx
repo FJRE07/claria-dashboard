@@ -1407,10 +1407,8 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
       {/* ── 1. KPI BAR ───────────────────────────────────────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
         {/* Ingreso — editable */}
-        <div style={{ background:C.card, border:`1px solid ${editingIncome?C.accent:C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6, cursor:onSaveIncome&&!editingIncome?"pointer":"default", transition:"border-color .2s" }}
-          onClick={()=>{ if(onSaveIncome&&!editingIncome){ setIncomeInput(String(income)); setEditingIncome(true); } }}
-          onMouseEnter={e=>{ if(onSaveIncome&&!editingIncome) e.currentTarget.style.borderColor=C.accent; }}
-          onMouseLeave={e=>{ if(!editingIncome) e.currentTarget.style.borderColor=C.border; }}>
+        <div style={{ background:C.card, border:`1px solid ${onSaveIncome?C.accent:C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6, cursor:onSaveIncome&&!editingIncome?"pointer":"default" }}
+          onClick={()=>{ if(onSaveIncome&&!editingIncome){ setIncomeInput(String(income)); setEditingIncome(true); } }}>
           <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>
             Ingreso mensual
           </span>
@@ -2339,15 +2337,32 @@ function SeccionAhorroMSI({ dash }) {
 }
 
 // ── KPI STRIP COMPARTIDA (sin Gastado Variable) ──────────────────────────────
-function KpiStrip({ income, fixedItems, msiPlans, txs=[] }) {
+function KpiStrip({ income, fixedItems, msiPlans, txs=[], onSaveIncome }) {
+  const [editingIncome, setEditingIncome] = useState(false);
+  const [incomeInput,   setIncomeInput]   = useState(String(income));
   const totalFixed = fixedItems.reduce((s,f)=>s+f.amt,0);
   const totalMSI   = msiPlans.filter(p=>p.paid<p.months).reduce((s,p)=>s+p.mo,0);
   const gastoVar   = txs.filter(t=>t.amt<0&&t.cat!=="Ahorro").reduce((s,t)=>s+Math.abs(t.amt),0);
   const libre      = Math.max(0, income-totalFixed-totalMSI-gastoVar);
+  const confirmar  = () => { if(incomeInput){ onSaveIncome(parseFloat(incomeInput)); setEditingIncome(false); } };
   return (
     <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:16 }}>
+      {/* Ingreso — editable */}
+      <div style={{ background:C.card, border:`1px solid ${onSaveIncome?C.accent:C.border}`, borderRadius:14, padding:"22px 20px", display:"flex", flexDirection:"column", gap:6, cursor:onSaveIncome&&!editingIncome?"pointer":"default" }}
+        onClick={()=>{ if(onSaveIncome&&!editingIncome){ setIncomeInput(String(income)); setEditingIncome(true); } }}>
+        <span style={{ color:C.textMuted, fontSize:10, fontFamily:F, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.08em" }}>Ingreso mensual</span>
+        {editingIncome
+          ? <div style={{ display:"flex", alignItems:"center", gap:6 }} onClick={e=>e.stopPropagation()}>
+              <input autoFocus value={incomeInput} type="number" onChange={e=>setIncomeInput(e.target.value)}
+                onKeyDown={e=>{ if(e.key==="Enter") confirmar(); if(e.key==="Escape") setEditingIncome(false); }}
+                style={{ flex:1, background:C.surface, border:`1px solid ${C.accent}`, borderRadius:7, padding:"4px 8px", color:C.accent, fontFamily:F, fontSize:18, fontWeight:700, outline:"none", minWidth:0 }}/>
+              <button onClick={confirmar} style={{ ...BtnP, padding:"4px 10px", fontSize:12, flexShrink:0 }}>✓</button>
+              <button onClick={()=>setEditingIncome(false)} style={{ background:"transparent", border:"none", cursor:"pointer", color:C.textMuted, fontSize:16, flexShrink:0 }}>✕</button>
+            </div>
+          : <span style={{ color:C.accent, fontSize:26, fontWeight:700, fontFamily:F, lineHeight:1.1 }}>{fmt(income)}</span>
+        }
+      </div>
       {[
-        { lbl:"Ingreso mensual",  val:fmt(income),     col:C.accent,  sub:null },
         { lbl:"Gastos fijos",     val:fmt(totalFixed), col:C.red,     sub:income>0?`${Math.round(totalFixed/income*100)}% del ingreso`:null },
         { lbl:"MSI / mes",        val:fmt(totalMSI),   col:C.yellow,  sub:income>0?`${Math.round(totalMSI/income*100)}% del ingreso`:null },
         { lbl:"Gastado variable", val:fmt(gastoVar),   col:C.blue,    sub:income>0?`${Math.round(gastoVar/income*100)}% del ingreso`:null },
@@ -2941,7 +2956,7 @@ function Dashboard({ logout }) {
             onSaveIncome={saveIncome}
             onDeleteMsi={async(id)=>{ console.log("[deleteMSI] id=",id); try{await API.deleteMSI(id); setMsiPlans(prev=>prev.filter(p=>p.id!==id));}catch(e){console.error("[deleteMSI] ERROR:",e); setApiError("Error eliminando MSI: "+e.message);} }}
             onDeleteAhorro={async(id)=>{ console.log("[deleteAhorro] id=",id); try{await API.deleteGasto(id); setTxs(prev=>prev.filter(t=>t.id!==id));}catch(e){console.error("[deleteAhorro] ERROR:",e); setApiError("Error eliminando ahorro: "+e.message);} }}/>}
-          {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
+          {tab==="fixed"        &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs} onSaveIncome={saveIncome}/>
             <TabFijos
               onRefresh={cargarDatos}
               fijosData={fixedItems.map(f=>({id:f.id,detalle:f.name,categoria:f.cat,grupo:f.cat,monto:f.amt,icono:f.icon,dia_cobro:f.day}))}
@@ -2954,7 +2969,7 @@ function Dashboard({ logout }) {
               onDelete={async(id)=>{ console.log("[deleteFijo] id=",id); try{ await API.deleteFijo(id); setFixedItems(p=>p.filter(f=>f.id!==id)); }catch(e){console.error("[deleteFijo] ERROR:",e); setApiError("Error eliminando gasto fijo: "+e.message);} }}
             /></>}
           {tab==="cards"        &&<CreditCards   txs={txs} cards={cards} setCards={setCards} setTxs={setTxs} msiPlans={msiPlans} setMsiPlans={setMsiPlans} onImportDone={cargarDatos} onIniciarImport={iniciarImport}/>}
-          {tab==="budget"       &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs}/>
+          {tab==="budget"       &&<><KpiStrip income={income} fixedItems={fixedItems} msiPlans={msiPlans} txs={txs} onSaveIncome={saveIncome}/>
             <TabPresupuesto
               presupuestoData={[]}
               ingreso={income}
