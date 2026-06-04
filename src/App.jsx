@@ -117,6 +117,7 @@ const mapApiTx = (t) => {
     icon: CAT_ICONS[cat] ?? "💸",
     src: t.via ?? "manual",
     cardId: t.tarjeta_id ?? null,
+    ecId: t.estado_cuenta_id ?? null,
   };
 };
 
@@ -430,7 +431,12 @@ function FixedModal({ item, onSave, onClose }) {
 
 // ── CARD DETAIL MODAL ─────────────────────────────────────────────────────────
 function CardDetailModal({ card, txs, msiPlans, onClose }) {
-  const cardTxs=txs.filter(t=>t.cardId===card.id&&t.amt<0);
+  const [cardTxs,setCardTxs]=useState(()=>txs.filter(t=>t.cardId===card.id&&t.amt<0));
+  useEffect(()=>{
+    API.getGastos({limit:500}).then(rows=>{
+      setCardTxs(rows.filter(t=>t.tarjeta_id===card.id&&t.tipo!=="abono").map(mapApiTx));
+    }).catch(()=>{});
+  },[card.id]);
   const cardMsi=msiPlans.filter(m=>m.cardId===card.id);
   const totalSpent=cardTxs.reduce((s,t)=>s+Math.abs(t.amt),0);
   const byCat=cardTxs.reduce((acc,t)=>{ acc[t.cat]=(acc[t.cat]||0)+Math.abs(t.amt); return acc; },{});
@@ -503,7 +509,7 @@ function CardDetailModal({ card, txs, msiPlans, onClose }) {
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>📄 {e.nombre_archivo||"Estado de cuenta"}</div>
                         <div style={{ color:C.textMuted, fontSize:11, marginTop:3 }}>
-                          {e.periodo_inicio&&e.periodo_fin ? `${new Date(e.periodo_inicio+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short"})} – ${new Date(e.periodo_fin+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}` : "—"}
+                          {e.periodo_inicio&&e.periodo_fin ? `${new Date(String(e.periodo_inicio).slice(0,10)+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short"})} – ${new Date(String(e.periodo_fin).slice(0,10)+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}` : "—"}
                         </div>
                       </div>
                       <div style={{ textAlign:"right", marginLeft:12, flexShrink:0 }}>
@@ -716,7 +722,7 @@ function CardModal({ card, onSave, onClose }) {
 // ── TRANSACTIONS ──────────────────────────────────────────────────────────────
 const TIPOS_EXCLUIR = ["pago","msi_cuota","abono_puntos","abono"];
 
-function Transactions({ txs, setTxs, onAdd, cards }) {
+function Transactions({ txs, setTxs, onAdd, cards, ecMap={} }) {
   const [type,setType]=useState("all"); const [catF,setCatF]=useState("all");
   const [cardF,setCardF]=useState("all"); const [from,setFrom]=useState(""); const [to,setTo]=useState("");
   const [editTx,setEditTx]=useState(null); const [addingTx,setAddingTx]=useState(false);
@@ -792,7 +798,7 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
             : list.map((tx,i)=>{
                 const card=cards.find(c=>c.id===tx.cardId);
                 return (
-                  <div key={tx.id} style={{ display:"grid", gridTemplateColumns:"44px 34px 1fr 78px 110px 96px 140px 72px 76px", padding:"11px 14px", background:C.card, border:`1px solid ${C.border}`, borderRadius:12, alignItems:"center", fontFamily:F, animation:`fadeIn .2s ease ${i*0.02}s both` }}>
+                  <div key={tx.id} style={{ display:"grid", gridTemplateColumns:"44px 34px 1fr 78px 110px 96px 140px 72px 76px", columnGap:"10px", padding:"11px 16px", background:C.card, border:`1px solid ${C.border}`, borderRadius:12, alignItems:"center", fontFamily:F, animation:`fadeIn .2s ease ${i*0.02}s both` }}>
                     <div style={{ color:C.textMuted, fontSize:10, fontFamily:"'IBM Plex Mono',monospace" }}>#{tx.id}</div>
                     <div style={{ fontSize:17 }}>{tx.icon}</div>
                     <div style={{ color:C.text, fontSize:13, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tx.desc}</div>
@@ -803,7 +809,7 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
                       {card?<span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:`${card.clr[0]}44`, color:"#fff", border:`1px solid ${card.clr[1]}55` }}>💳 {card.name}</span>
                            :<span style={{ color:C.textMuted, fontSize:12 }}>—</span>}
                     </div>
-                    <div style={{ textAlign:"center" }}><span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600,
+                    <div style={{ textAlign:"center" }}><span title={tx.src==="estado"&&ecMap[tx.ecId]?ecMap[tx.ecId]:undefined} style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, cursor:tx.src==="estado"&&ecMap[tx.ecId]?"help":"default",
   background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":tx.src==="estado"?"rgba(148,163,184,0.12)":C.blueDim,
   color:tx.src==="whatsapp"?C.wa:tx.src==="estado"?C.textDim:C.blue }}>
   {tx.src==="whatsapp"?"WA":tx.src==="estado"?"PDF":"Man"}
@@ -1424,6 +1430,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     cuota_mensual:p.mo,
     saldo_pendiente:p.mo*(p.months-p.paid),
     proxima_cuota:new Date(new Date(p.start).setMonth(new Date(p.start).getMonth()+p.paid+1)).toISOString().slice(0,10),
+    tarjeta_id:p.cardId,
   }));
   const d = {
     porCategoria,
@@ -2795,6 +2802,7 @@ function Dashboard({ logout }) {
   const [onboarding,setOnboarding]=useState(false);
   const [procesos,setProcesos]=useState([]);
   const [mostrarProgreso,setMostrarProgreso]=useState(false);
+  const [ecMap,setEcMap]=useState({});
 
   const cargarDatos=()=>{
     const periodo=periodoActual();
@@ -2805,7 +2813,9 @@ function Dashboard({ logout }) {
       API.getMSI(),
       API.getPresupuestoGrupos(),
       API.getTarjetas(),
-    ]).then(([dash,fijosData,msiData,grupos,tarjetasData])=>{
+      API.getEstados(),
+    ]).then(([dash,fijosData,msiData,grupos,tarjetasData,estados])=>{
+      if(Array.isArray(estados)) setEcMap(Object.fromEntries(estados.map(e=>[e.id,e.nombre_archivo])));
       if(dash.ingreso) setIncome(Number(dash.ingreso));
       setTxs((dash.ultimasTransacciones||[]).map(mapApiTx));
       if(!dash.ingreso||dash.ingreso===0) setOnboarding(true);
@@ -3002,7 +3012,7 @@ function Dashboard({ logout }) {
                 saveGroupBudgets(grupos);
               }}
             /></>}
-          {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards}/>}
+          {tab==="transactions" &&<Transactions  txs={txs} setTxs={setTxs} onAdd={addTx} cards={cards} ecMap={ecMap}/>}
         </div>
       </main>
     </div>
