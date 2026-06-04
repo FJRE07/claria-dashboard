@@ -28,6 +28,7 @@ async function req(method, path, body) {
 export const login          = (email, password) => req("POST", "/auth/login", { email, password });
 export const setup          = (email, password) => req("POST", "/auth/setup", { email, password });
 export const getIngresos    = ()              => req("GET", "/api/ingresos");
+export const patchIngreso   = (monto)         => req("PATCH", "/api/ingresos", { monto });
 export const postIngreso    = (data)          => req("POST", "/api/ingresos", data);
 export const putIngreso     = (id, data)      => req("PUT", `/api/ingresos/${id}`, data);
 export const deleteIngreso  = (id)            => req("DELETE", `/api/ingresos/${id}`);

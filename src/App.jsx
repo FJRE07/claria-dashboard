@@ -2865,12 +2865,7 @@ function Dashboard({ logout }) {
 
   const saveIncome = async (monto) => {
     try {
-      const ingresos = await API.getIngresos();
-      if (ingresos && ingresos.length > 0) {
-        await API.putIngreso(ingresos[0].id, { concepto: ingresos[0].concepto, monto });
-      } else {
-        await API.postIngreso({ concepto: "Ingreso mensual", monto });
-      }
+      await API.patchIngreso(monto);
       setIncome(monto);
     } catch (e) { console.error("Error actualizando ingreso:", e); }
   };
