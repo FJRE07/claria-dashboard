@@ -434,6 +434,9 @@ function CardDetailModal({ card, txs, msiPlans, onClose }) {
   const cardMsi=msiPlans.filter(m=>m.cardId===card.id);
   const totalSpent=cardTxs.reduce((s,t)=>s+Math.abs(t.amt),0);
   const byCat=cardTxs.reduce((acc,t)=>{ acc[t.cat]=(acc[t.cat]||0)+Math.abs(t.amt); return acc; },{});
+  const [estados,setEstados]=useState([]);
+  const [tabActivo,setTabActivo]=useState("resumen");
+  useEffect(()=>{ API.getEstados(card.id).then(setEstados).catch(()=>{}); },[card.id]);
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }}>
       <div onClick={e=>e.stopPropagation()} style={{ width:520, maxHeight:"82vh", background:C.surface, border:`1px solid ${C.border}`, borderRadius:24, overflow:"hidden", display:"flex", flexDirection:"column", animation:"slideUp .25s ease" }}>
@@ -448,38 +451,70 @@ function CardDetailModal({ card, txs, msiPlans, onClose }) {
             ))}
           </div>
         </div>
+        {/* Tabs */}
+        <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${C.border}`, flexShrink:0 }}>
+          {[["resumen","Resumen"],["archivos",`Archivos (${estados.length})`]].map(([id,lbl])=>(
+            <button key={id} onClick={()=>setTabActivo(id)}
+              style={{ flex:1, padding:"10px 0", fontSize:12, fontFamily:F, fontWeight:600, border:"none", borderBottom:`2px solid ${tabActivo===id?C.accent:"transparent"}`, background:"transparent", color:tabActivo===id?C.accent:C.textMuted, cursor:"pointer" }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
         <div style={{ overflowY:"auto", padding:"20px 24px" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:20 }}>
-            {[{lbl:"Gastado",val:fmt(totalSpent),col:C.red},{lbl:"Transacciones",val:cardTxs.length,col:C.blue},{lbl:"Utilización",val:`${((card.used/card.lim)*100).toFixed(0)}%`,col:C.yellow}].map(s=>(
-              <div key={s.lbl} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px" }}>
-                <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:6 }}>{s.lbl}</div>
-                <div style={{ color:s.col, fontSize:20, fontWeight:700, fontFamily:F }}>{s.val}</div>
+          {tabActivo==="resumen"&&<>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:20 }}>
+              {[{lbl:"Gastado",val:fmt(totalSpent),col:C.red},{lbl:"Transacciones",val:cardTxs.length,col:C.blue},{lbl:"Utilización",val:`${((card.used/card.lim)*100).toFixed(0)}%`,col:C.yellow}].map(s=>(
+                <div key={s.lbl} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px" }}>
+                  <div style={{ color:C.textMuted, fontSize:10, fontFamily:F, textTransform:"uppercase", marginBottom:6 }}>{s.lbl}</div>
+                  <div style={{ color:s.col, fontSize:20, fontWeight:700, fontFamily:F }}>{s.val}</div>
+                </div>
+              ))}
+            </div>
+            {Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>(
+              <div key={cat} style={{ marginBottom:8 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}><span style={{ color:C.textDim, fontSize:12, fontFamily:F }}>{cat}</span><span style={{ color:C.text, fontSize:12, fontFamily:F, fontWeight:600 }}>{fmt(amt)}</span></div>
+                <ProgressBar value={amt} max={totalSpent} h={4}/>
               </div>
             ))}
-          </div>
-          {Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>(
-            <div key={cat} style={{ marginBottom:8 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}><span style={{ color:C.textDim, fontSize:12, fontFamily:F }}>{cat}</span><span style={{ color:C.text, fontSize:12, fontFamily:F, fontWeight:600 }}>{fmt(amt)}</span></div>
-              <ProgressBar value={amt} max={totalSpent} h={4}/>
-            </div>
-          ))}
-          {cardMsi.length>0&&<div style={{ margin:"16px 0" }}>
-            <Label>Planes MSI</Label>
-            {cardMsi.map(p=>(
-              <div key={p.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 16px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <div><div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:500 }}>{p.name}</div><div style={{ color:C.textMuted, fontSize:11 }}>{p.paid}/{p.months} cuotas</div></div>
-                <div style={{ color:C.yellow, fontSize:14, fontWeight:700, fontFamily:F }}>{fmt(p.mo)}/mes</div>
+            {cardMsi.length>0&&<div style={{ margin:"16px 0" }}>
+              <Label>Planes MSI</Label>
+              {cardMsi.map(p=>(
+                <div key={p.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 16px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div><div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:500 }}>{p.name}</div><div style={{ color:C.textMuted, fontSize:11 }}>{p.paid}/{p.months} cuotas</div></div>
+                  <div style={{ color:C.yellow, fontSize:14, fontWeight:700, fontFamily:F }}>{fmt(p.mo)}/mes</div>
+                </div>
+              ))}
+            </div>}
+            <Label>Últimas transacciones</Label>
+            {cardTxs.slice(0,6).map(tx=>(
+              <div key={tx.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:C.card, border:`1px solid ${C.border}`, borderRadius:10, marginBottom:6 }}>
+                <span style={{ fontSize:16 }}>{tx.icon}</span>
+                <div style={{ flex:1 }}><div style={{ color:C.text, fontSize:13, fontFamily:F }}>{tx.desc}</div><div style={{ color:C.textMuted, fontSize:11 }}>{tx.date} · {tx.cat}</div></div>
+                <div style={{ color:C.red, fontWeight:700, fontSize:13, fontFamily:F }}>{fmt(tx.amt)}</div>
               </div>
             ))}
-          </div>}
-          <Label>Últimas transacciones</Label>
-          {cardTxs.slice(0,6).map(tx=>(
-            <div key={tx.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:C.card, border:`1px solid ${C.border}`, borderRadius:10, marginBottom:6 }}>
-              <span style={{ fontSize:16 }}>{tx.icon}</span>
-              <div style={{ flex:1 }}><div style={{ color:C.text, fontSize:13, fontFamily:F }}>{tx.desc}</div><div style={{ color:C.textMuted, fontSize:11 }}>{tx.date} · {tx.cat}</div></div>
-              <div style={{ color:C.red, fontWeight:700, fontSize:13, fontFamily:F }}>{fmt(tx.amt)}</div>
-            </div>
-          ))}
+          </>}
+          {tabActivo==="archivos"&&<>
+            {estados.length===0
+              ? <div style={{ color:C.textMuted, fontSize:13, fontFamily:F, textAlign:"center", padding:"30px 0" }}>No hay archivos importados para esta tarjeta</div>
+              : estados.map(e=>(
+                  <div key={e.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 16px", marginBottom:8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ color:C.text, fontSize:13, fontFamily:F, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>📄 {e.nombre_archivo||"Estado de cuenta"}</div>
+                        <div style={{ color:C.textMuted, fontSize:11, marginTop:3 }}>
+                          {e.periodo_inicio&&e.periodo_fin ? `${new Date(e.periodo_inicio+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short"})} – ${new Date(e.periodo_fin+"T12:00:00").toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}` : "—"}
+                        </div>
+                      </div>
+                      <div style={{ textAlign:"right", marginLeft:12, flexShrink:0 }}>
+                        <div style={{ color:C.accent, fontSize:12, fontWeight:600 }}>{e.transacciones_importadas} tx · {e.msi_importados} MSI</div>
+                        <div style={{ color:C.textMuted, fontSize:10, marginTop:2 }}>{new Date(e.fecha_subida).toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+            }
+          </>}
         </div>
       </div>
     </div>
@@ -768,7 +803,11 @@ function Transactions({ txs, setTxs, onAdd, cards }) {
                       {card?<span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:`${card.clr[0]}44`, color:"#fff", border:`1px solid ${card.clr[1]}55` }}>💳 {card.name}</span>
                            :<span style={{ color:C.textMuted, fontSize:12 }}>—</span>}
                     </div>
-                    <div style={{ textAlign:"center" }}><span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600, background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":C.blueDim, color:tx.src==="whatsapp"?C.wa:C.blue }}>{tx.src==="whatsapp"?"WA":"Man"}</span></div>
+                    <div style={{ textAlign:"center" }}><span style={{ fontSize:11, padding:"3px 8px", borderRadius:99, fontWeight:600,
+  background:tx.src==="whatsapp"?"rgba(37,211,102,0.1)":tx.src==="estado"?C.accentDim:C.blueDim,
+  color:tx.src==="whatsapp"?C.wa:tx.src==="estado"?C.accent:C.blue }}>
+  {tx.src==="whatsapp"?"WA":tx.src==="estado"?"PDF":"Man"}
+</span></div>
                     <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
                       {editMode&&<><button onClick={()=>setEditTx(tx)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, cursor:"pointer", padding:"3px 7px", fontSize:11 }}>✎</button>
                       <button onClick={()=>delTx(tx.id)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.red+"88", cursor:"pointer", padding:"3px 7px", fontSize:11 }}>🗑</button></>}
@@ -1398,6 +1437,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     ahorrosTxs: txs.filter(t=>t.cat==="Ahorro").map(t=>({ id:t.id, desc:t.desc, amt:Math.abs(t.amt), date:t.date })),
     onDeleteMsi,
     onDeleteAhorro,
+    onRefresh,
     cards,
   };
 
@@ -2009,38 +2049,31 @@ function SeccionAhorroMSI({ dash }) {
     }catch(e){console.error("Error guardando MSI:",e);}
   };
 
-  const [editandoMSI, setEditandoMSI] = useState(null); // plan completo en edición
+  const [editandoMSI, setEditandoMSI] = useState(null);
   const [editMSIForm, setEditMSIForm] = useState({});
   const abrirEditMSI = (plan)=>{
     setEditandoMSI(plan);
     setEditMSIForm({
-      descripcion:   plan.descripcion||"",
-      monto_total:   String(plan.monto_total||""),
-      total_pagos:   String(plan.total_pagos||""),
-      pagos_hechos:  String(plan.pagos_hechos||"0"),
-      cuota_mensual: String(plan.cuota_mensual||""),
-      fecha_inicio:  String(plan.fecha_inicio||"").slice(0,10),
-      activo:        plan.activo!==false,
+      monto_total: String(plan.monto_total||""),
+      total_pagos: String(plan.total_pagos||""),
     });
   };
   const guardarEditMSI = async()=>{
     if(!editandoMSI)return;
-    const total=Number(editMSIForm.total_pagos)||editandoMSI.total_pagos;
-    const monto=Number(editMSIForm.monto_total)||editandoMSI.monto_total;
-    const pagados=Number(editMSIForm.pagos_hechos)||0;
-    const mo=Number(editMSIForm.cuota_mensual)||(monto>0&&total>0?Math.round(monto/total):0);
-    const payload={
-      descripcion:   editMSIForm.descripcion,
-      monto_total:   monto,
-      total_pagos:   total,
-      pagos_hechos:  pagados,
-      cuota_mensual: mo,
-      fecha_inicio:  editMSIForm.fecha_inicio||null,
-      activo:        editMSIForm.activo,
-    };
-    setLocalPlanes(p=>p.map(x=>x.id===editandoMSI.id?{...x,...payload,pagos_restantes:total-pagados,saldo_pendiente:mo*(total-pagados)}:x));
+    const total  = Number(editMSIForm.total_pagos) || editandoMSI.total_pagos;
+    const monto  = Number(editMSIForm.monto_total) || editandoMSI.monto_total;
+    const pagados = Number(editandoMSI.pagos_hechos) || 0;
+    const mo     = monto > 0 && total > 0 ? Math.round(monto / total) : 0;
+    const payload = { monto_total: monto, total_pagos: total, cuota_mensual: mo };
+    setLocalPlanes(p=>p.map(x=>x.id===editandoMSI.id
+      ? {...x,...payload,pagos_restantes:total-pagados,saldo_pendiente:mo*(total-pagados)}
+      : x
+    ));
     setEditandoMSI(null);
-    try{ await API.putMSI(editandoMSI.id, payload); }
+    try{
+      await API.putMSI(editandoMSI.id, payload);
+      dash?.onRefresh?.();   // recalcula KPI MSI/mes en toda la app
+    }
     catch(e){ console.error("Error actualizando MSI:",e); }
   };
 
@@ -2048,33 +2081,26 @@ function SeccionAhorroMSI({ dash }) {
     <>
     {/* Modal editar MSI */}
     {editandoMSI&&<div onClick={()=>setEditandoMSI(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
-      <div onClick={e=>e.stopPropagation()} style={{width:440,background:C.surface,border:`1px solid ${C.border}`,borderRadius:18,padding:"24px 28px",animation:"slideUp .2s ease"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-          <div style={{fontSize:15,fontWeight:600,color:C.text}}>Editar plan MSI</div>
+      <div onClick={e=>e.stopPropagation()} style={{width:360,background:C.surface,border:`1px solid ${C.border}`,borderRadius:18,padding:"24px 28px",animation:"slideUp .2s ease"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <div style={{fontSize:15,fontWeight:600,color:C.text}}>Corregir plan MSI</div>
           <button onClick={()=>setEditandoMSI(null)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
         </div>
+        <div style={{fontSize:12,color:C.textMuted,marginBottom:18}}>{editandoMSI.descripcion}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-          {[
-            ["descripcion","Descripción","1/-1","text","ej. MACSTORE Gran T Coapa"],
-            ["monto_total","Monto total","auto","number","50000"],
-            ["total_pagos","Total meses","auto","number","12"],
-            ["pagos_hechos","Pagos hechos","auto","number","5"],
-            ["cuota_mensual","Cuota/mes","auto","number","4167"],
-            ["fecha_inicio","Fecha inicio","auto","date",""],
-          ].map(([k,lbl,col,type,ph])=>(
-            <div key={k} style={{gridColumn:col}}>
+          {[["monto_total","Monto original","number","50000"],["total_pagos","Número de meses","number","12"]].map(([k,lbl,type,ph])=>(
+            <div key={k}>
               <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{lbl}</div>
-              <input type={type} placeholder={ph} value={editMSIForm[k]||""} onChange={e=>setEditMSIForm(p=>({...p,[k]:e.target.value}))}
+              <input autoFocus={k==="monto_total"} type={type} placeholder={ph} value={editMSIForm[k]||""} onChange={e=>setEditMSIForm(p=>({...p,[k]:e.target.value}))}
                 style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:13,color:C.text,outline:"none",fontFamily:F}}/>
             </div>
           ))}
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none"}}>
-            <input type="checkbox" checked={!!editMSIForm.activo} onChange={e=>setEditMSIForm(p=>({...p,activo:e.target.checked}))} style={{width:14,height:14}}/>
-            <span style={{fontSize:12,color:C.textDim}}>Plan activo</span>
-          </label>
-        </div>
+        {editMSIForm.monto_total&&editMSIForm.total_pagos&&(
+          <div style={{fontSize:12,color:C.textMuted,marginBottom:14}}>
+            Cuota calculada: <strong style={{color:C.accent}}>${Math.round(Number(editMSIForm.monto_total)/Number(editMSIForm.total_pagos)).toLocaleString("es-MX")}/mes</strong>
+          </div>
+        )}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={()=>setEditandoMSI(null)} style={{padding:"7px 16px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,cursor:"pointer",fontSize:12}}>Cancelar</button>
           <button onClick={guardarEditMSI} style={{padding:"7px 16px",borderRadius:8,border:"none",background:C.accent,color:C.bg,cursor:"pointer",fontSize:12,fontWeight:600}}>Guardar</button>
@@ -2290,12 +2316,14 @@ function SeccionAhorroMSI({ dash }) {
           : localPlanes.map((m,idx)=>{
               const color=COLORS_MSI[idx%COLORS_MSI.length];
               const pagados=Number(m.pagos_hechos), total=Number(m.total_pagos), restantes=Number(m.pagos_restantes);
+              const cardMSI=(dash?.cards||[]).find(c=>c.id===m.tarjeta_id);
               return (
                 <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"8px 0", borderBottom:`0.5px solid ${C.border}` }}>
                   {editModoMSI&&<button onClick={()=>{ setLocalPlanes(p=>p.filter(x=>x.id!==m.id)); dash?.onDeleteMsi?.(m.id); }} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer", flexShrink:0, marginRight:8, alignSelf:"center" }}>✕</button>}
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, flexWrap:"wrap" }}>
                       <span style={{ fontSize:12, fontWeight:600, color:C.text }}>{m.descripcion}</span>
+                      {cardMSI&&<span style={{ fontSize:10, padding:"1px 7px", borderRadius:99, fontWeight:600, background:`${cardMSI.clr[0]}44`, color:"#fff", border:`1px solid ${cardMSI.clr[1]}55` }}>💳 {cardMSI.name} ••{cardMSI.last4}</span>}
                       <button onClick={()=>abrirEditMSI(m)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, fontSize:10, padding:"0 4px", borderRadius:4 }}
                         onMouseEnter={e=>e.currentTarget.style.color=C.accent}
                         onMouseLeave={e=>e.currentTarget.style.color=C.textMuted}>Editar</button>
