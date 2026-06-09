@@ -2647,7 +2647,15 @@ function TabPresupuesto({ presupuestoData=[], ingreso=40000, onSave }) {
 
   const handleDrop   = p=>{ if(!drag)return; setCats(prev=>prev.map(c=>c.id===drag?{...c,prioridad:p}:c)); setDrag(null); };
   const handleMonto  = (id,val)=>{ const num=Number(val.replace(/[^0-9.]/g,""))||0; setCats(prev=>prev.map(c=>c.id===id?{...c,monto:num}:c)); };
-  const handleAgregar= ()=>{ if(!nuevo.nombre||!nuevo.monto)return; setCats(prev=>[...prev,{id:Date.now(),...nuevo,monto:Number(String(nuevo.monto).replace(/[^0-9.]/g,""))}]); setNuevo({nombre:"",sub:"",prioridad:"Flexible",monto:""}); };
+  const handleAgregar= ()=>{
+    if(!nuevo.nombre||!nuevo.monto)return;
+    const entry={id:Date.now(),...nuevo,monto:Number(String(nuevo.monto).replace(/[^0-9.]/g,""))};
+    const newCats=[...cats,entry];
+    setCats(newCats);
+    setNuevo({nombre:"",sub:"",prioridad:"Flexible",monto:""});
+    try{ localStorage.setItem("claria_ppto_cats",JSON.stringify(newCats)); }catch{}
+    if(onSave) onSave(newCats).catch(console.error);
+  };
   const handleDelete = id=>{
     const newCats=cats.filter(c=>c.id!==id);
     setCats(newCats);
