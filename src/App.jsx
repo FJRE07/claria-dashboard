@@ -2058,28 +2058,52 @@ function SeccionAhorroMSI({ dash }) {
 
   const [editandoMSI, setEditandoMSI] = useState(null);
   const [editMSIForm, setEditMSIForm] = useState({});
+  const esDiferido = (plan) => Number(plan.cuota_mensual) === 0;
   const abrirEditMSI = (plan)=>{
     setEditandoMSI(plan);
     setEditMSIForm({
       monto_total: String(plan.monto_total||""),
       total_pagos: String(plan.total_pagos||""),
+      cuota_override: "",   // solo para diferidos: cuota cuando se cobre
+      fecha_cobro: "",      // solo para diferidos: YYYY-MM
     });
   };
   const guardarEditMSI = async()=>{
     if(!editandoMSI)return;
-    const total  = Number(editMSIForm.total_pagos) || editandoMSI.total_pagos;
-    const monto  = Number(editMSIForm.monto_total) || editandoMSI.monto_total;
     const pagados = Number(editandoMSI.pagos_hechos) || 0;
-    const mo     = monto > 0 && total > 0 ? Math.round(monto / total) : 0;
-    const payload = { monto_total: monto, total_pagos: total, cuota_mensual: mo };
+    let total, monto, mo, fechaInicio;
+
+    if(esDiferido(editandoMSI)) {
+      monto = Number(editMSIForm.monto_total) || editandoMSI.monto_total;
+      total = 1;
+      // Si el usuario fijó una cuota, usarla; si no, dejar 0 (aún no exigible)
+      mo = editMSIForm.cuota_override ? Number(editMSIForm.cuota_override) : 0;
+      // Fecha de cobro: guardamos un mes antes para que proxima_cuota apunte al mes correcto
+      if(editMSIForm.fecha_cobro) {
+        const d = new Date(editMSIForm.fecha_cobro + "-01");
+        d.setMonth(d.getMonth() - 1);
+        fechaInicio = d.toISOString().slice(0, 10);
+      }
+    } else {
+      total = Number(editMSIForm.total_pagos) || editandoMSI.total_pagos;
+      monto = Number(editMSIForm.monto_total) || editandoMSI.monto_total;
+      mo    = monto > 0 && total > 0 ? Math.round(monto / total) : 0;
+    }
+
+    const payload = { monto_total: monto, total_pagos: total, cuota_mensual: mo,
+                      ...(fechaInicio ? { fecha_inicio: fechaInicio } : {}) };
     setLocalPlanes(p=>p.map(x=>x.id===editandoMSI.id
-      ? {...x,...payload,pagos_restantes:total-pagados,saldo_pendiente:mo*(total-pagados)}
+      ? {...x,...payload, pagos_restantes:total-pagados,
+         saldo_pendiente: mo>0 ? mo*(total-pagados) : monto,
+         proxima_cuota: mo>0&&fechaInicio
+           ? new Date(new Date(fechaInicio).setMonth(new Date(fechaInicio).getMonth()+1)).toISOString().slice(0,10)
+           : x.proxima_cuota }
       : x
     ));
     setEditandoMSI(null);
     try{
       await API.putMSI(editandoMSI.id, payload);
-      dash?.onRefresh?.();   // recalcula KPI MSI/mes en toda la app
+      dash?.onRefresh?.();
     }
     catch(e){ console.error("Error actualizando MSI:",e); }
   };
@@ -2088,26 +2112,50 @@ function SeccionAhorroMSI({ dash }) {
     <>
     {/* Modal editar MSI */}
     {editandoMSI&&<div onClick={()=>setEditandoMSI(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
-      <div onClick={e=>e.stopPropagation()} style={{width:360,background:C.surface,border:`1px solid ${C.border}`,borderRadius:18,padding:"24px 28px",animation:"slideUp .2s ease"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-          <div style={{fontSize:15,fontWeight:600,color:C.text}}>Corregir plan MSI</div>
+      <div onClick={e=>e.stopPropagation()} style={{width:380,background:C.surface,border:`1px solid ${C.border}`,borderRadius:18,padding:"24px 28px",animation:"slideUp .2s ease"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+          <div style={{fontSize:15,fontWeight:600,color:C.text}}>{esDiferido(editandoMSI)?"Compra diferida":"Corregir plan MSI"}</div>
           <button onClick={()=>setEditandoMSI(null)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
         </div>
-        <div style={{fontSize:12,color:C.textMuted,marginBottom:18}}>{editandoMSI.descripcion}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-          {[["monto_total","Monto original","number","50000"],["total_pagos","Número de meses","number","12"]].map(([k,lbl,type,ph])=>(
-            <div key={k}>
-              <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{lbl}</div>
-              <input autoFocus={k==="monto_total"} type={type} placeholder={ph} value={editMSIForm[k]||""} onChange={e=>setEditMSIForm(p=>({...p,[k]:e.target.value}))}
-                style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:13,color:C.text,outline:"none",fontFamily:F}}/>
-            </div>
-          ))}
-        </div>
-        {editMSIForm.monto_total&&editMSIForm.total_pagos&&(
-          <div style={{fontSize:12,color:C.textMuted,marginBottom:14}}>
-            Cuota calculada: <strong style={{color:C.accent}}>${Math.round(Number(editMSIForm.monto_total)/Number(editMSIForm.total_pagos)).toLocaleString("es-MX")}/mes</strong>
+        <div style={{fontSize:12,color:C.textMuted,marginBottom:16}}>{editandoMSI.descripcion}</div>
+
+        {esDiferido(editandoMSI) ? <>
+          {/* ── Compra diferida: monto + cobro estimado ── */}
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.textDim}}>
+            💡 El banco cobrará este monto en una fecha futura. Establece cuándo y cuánto para que aparezca en tu flujo mensual.
           </div>
-        )}
+          <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+            {[["monto_total","Monto total ($)","number","14819"],["cuota_override","Cuota cuando se cobre ($)","number","14819"]].map(([k,lbl,type,ph])=>(
+              <div key={k}>
+                <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{lbl}</div>
+                <input type={type} placeholder={ph} value={editMSIForm[k]||""} onChange={e=>setEditMSIForm(p=>({...p,[k]:e.target.value}))}
+                  style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:F}}/>
+              </div>
+            ))}
+            <div>
+              <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>Mes estimado de cobro</div>
+              <input type="month" value={editMSIForm.fecha_cobro||""} onChange={e=>setEditMSIForm(p=>({...p,fecha_cobro:e.target.value}))}
+                style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:F}}/>
+            </div>
+          </div>
+        </> : <>
+          {/* ── Plan MSI regular ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+            {[["monto_total","Monto original","number","50000"],["total_pagos","Número de meses","number","12"]].map(([k,lbl,type,ph])=>(
+              <div key={k}>
+                <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{lbl}</div>
+                <input autoFocus={k==="monto_total"} type={type} placeholder={ph} value={editMSIForm[k]||""} onChange={e=>setEditMSIForm(p=>({...p,[k]:e.target.value}))}
+                  style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:13,color:C.text,outline:"none",fontFamily:F}}/>
+              </div>
+            ))}
+          </div>
+          {editMSIForm.monto_total&&editMSIForm.total_pagos&&(
+            <div style={{fontSize:12,color:C.textMuted,marginBottom:14}}>
+              Cuota calculada: <strong style={{color:C.accent}}>${Math.round(Number(editMSIForm.monto_total)/Number(editMSIForm.total_pagos)).toLocaleString("es-MX")}/mes</strong>
+            </div>
+          )}
+        </>}
+
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={()=>setEditandoMSI(null)} style={{padding:"7px 16px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textDim,cursor:"pointer",fontSize:12}}>Cancelar</button>
           <button onClick={guardarEditMSI} style={{padding:"7px 16px",borderRadius:8,border:"none",background:C.accent,color:C.bg,cursor:"pointer",fontSize:12,fontWeight:600}}>Guardar</button>
