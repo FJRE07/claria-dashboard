@@ -1428,8 +1428,8 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
     pagos_hechos:p.paid, total_pagos:p.months,
     pagos_restantes:p.months-p.paid,
     cuota_mensual:p.mo,
-    saldo_pendiente:p.mo*(p.months-p.paid),
-    proxima_cuota:new Date(new Date(p.start).setMonth(new Date(p.start).getMonth()+p.paid+1)).toISOString().slice(0,10),
+    saldo_pendiente:p.mo>0 ? p.mo*(p.months-p.paid) : p.total,
+    proxima_cuota:p.mo>0 ? new Date(new Date(p.start).setMonth(new Date(p.start).getMonth()+p.paid+1)).toISOString().slice(0,10) : null,
     tarjeta_id:p.cardId,
   }));
   const d = {
