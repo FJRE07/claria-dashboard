@@ -2063,15 +2063,17 @@ function SeccionAhorroMSI({ dash }) {
   const abrirEditMSI = (plan)=>{
     setEditandoMSI(plan);
     setEditMSIForm({
+      descripcion: String(plan.descripcion||""),
       monto_total: String(plan.monto_total||""),
       total_pagos: String(plan.total_pagos||""),
-      cuota_override: "",   // solo para diferidos: cuota cuando se cobre
-      fecha_cobro: "",      // solo para diferidos: YYYY-MM
+      cuota_override: "",
+      fecha_cobro: "",
     });
   };
   const guardarEditMSI = async()=>{
     if(!editandoMSI)return;
     const pagados = Number(editandoMSI.pagos_hechos) || 0;
+    const nuevaDesc = editMSIForm.descripcion?.trim() || editandoMSI.descripcion;
     let total, monto, mo, fechaInicio;
 
     if(esDiferido(editandoMSI)) {
@@ -2091,10 +2093,10 @@ function SeccionAhorroMSI({ dash }) {
       mo    = monto > 0 && total > 0 ? Math.round(monto / total) : 0;
     }
 
-    const payload = { monto_total: monto, total_pagos: total, cuota_mensual: mo,
+    const payload = { descripcion: nuevaDesc, monto_total: monto, total_pagos: total, cuota_mensual: mo,
                       ...(fechaInicio ? { fecha_inicio: fechaInicio } : {}) };
     setLocalPlanes(p=>p.map(x=>x.id===editandoMSI.id
-      ? {...x,...payload, pagos_restantes:total-pagados,
+      ? {...x,...payload, descripcion:nuevaDesc, pagos_restantes:total-pagados,
          saldo_pendiente: mo>0 ? mo*(total-pagados) : monto,
          proxima_cuota: mo>0&&fechaInicio
            ? new Date(new Date(fechaInicio).setMonth(new Date(fechaInicio).getMonth()+1)).toISOString().slice(0,10)
@@ -2118,7 +2120,11 @@ function SeccionAhorroMSI({ dash }) {
           <div style={{fontSize:15,fontWeight:600,color:C.text}}>{esDiferido(editandoMSI)?"Compra diferida":"Corregir plan MSI"}</div>
           <button onClick={()=>setEditandoMSI(null)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:18}}>✕</button>
         </div>
-        <div style={{fontSize:12,color:C.textMuted,marginBottom:16}}>{editandoMSI.descripcion}</div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>Nombre / concepto</div>
+          <input value={editMSIForm.descripcion||""} onChange={e=>setEditMSIForm(p=>({...p,descripcion:e.target.value}))}
+            style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:F}}/>
+        </div>
 
         {esDiferido(editandoMSI) ? <>
           {/* ── Compra diferida: monto + cobro estimado ── */}
@@ -2375,14 +2381,14 @@ function SeccionAhorroMSI({ dash }) {
               const cardMSI=(dash?.cards||[]).find(c=>c.id===m.tarjeta_id);
               return (
                 <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"8px 0", borderBottom:`0.5px solid ${C.border}` }}>
-                  {editModoMSI&&<button onClick={()=>{ setLocalPlanes(p=>p.filter(x=>x.id!==m.id)); dash?.onDeleteMsi?.(m.id); }} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:5, color:C.red, padding:"2px 6px", fontSize:11, cursor:"pointer", flexShrink:0, marginRight:8, alignSelf:"center" }}>✕</button>}
+                  <div style={{ display:"flex", flexDirection:"column", gap:4, alignSelf:"center", marginRight:8, flexShrink:0 }}>
+                    <button onClick={()=>abrirEditMSI(m)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, padding:"3px 8px", fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>✎ Editar</button>
+                    {editModoMSI&&<button onClick={()=>{ setLocalPlanes(p=>p.filter(x=>x.id!==m.id)); dash?.onDeleteMsi?.(m.id); }} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:6, color:C.red, padding:"3px 8px", fontSize:11, cursor:"pointer" }}>✕ Borrar</button>}
+                  </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, flexWrap:"wrap" }}>
                       <span style={{ fontSize:12, fontWeight:600, color:C.text }}>{m.descripcion}</span>
                       {cardMSI&&<span style={{ fontSize:10, padding:"1px 7px", borderRadius:99, fontWeight:600, background:`${cardMSI.clr[0]}44`, color:"#fff", border:`1px solid ${cardMSI.clr[1]}55` }}>💳 {cardMSI.name} ••{cardMSI.last4}</span>}
-                      <button onClick={()=>abrirEditMSI(m)} style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, fontSize:10, padding:"0 4px", borderRadius:4 }}
-                        onMouseEnter={e=>e.currentTarget.style.color=C.accent}
-                        onMouseLeave={e=>e.currentTarget.style.color=C.textMuted}>Editar</button>
                     </div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:3, marginBottom:3 }}>
                       {Array.from({length:total}).map((_,i)=>(
@@ -3030,7 +3036,7 @@ function Dashboard({ logout }) {
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=col;e.currentTarget.style.color=col;}}
                 onMouseLeave={e=>{ if(!mostrarProgreso){e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textDim;} }}>
                 <span style={{ fontSize:14 }}>{activos>0?"⏳":errores>0?"❌":"✅"}</span>
-                <span>Progreso</span>
+                <span>{activos>0?`Importando ${activos} PDF…`:errores>0?"Error al importar":"PDFs listos"}</span>
                 <span style={{ background:col,color:C.bg,borderRadius:99,fontSize:10,fontWeight:700,padding:"1px 6px",minWidth:18,textAlign:"center",lineHeight:"16px" }}>{procesos.length}</span>
               </button>
             );
