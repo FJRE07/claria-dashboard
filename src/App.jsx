@@ -2381,10 +2381,10 @@ function SeccionAhorroMSI({ dash }) {
               const cardMSI=(dash?.cards||[]).find(c=>c.id===m.tarjeta_id);
               return (
                 <div key={m.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"8px 0", borderBottom:`0.5px solid ${C.border}` }}>
-                  <div style={{ display:"flex", flexDirection:"column", gap:4, alignSelf:"center", marginRight:8, flexShrink:0 }}>
-                    <button onClick={()=>abrirEditMSI(m)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:6, color:C.textDim, padding:"3px 8px", fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>✎ Editar</button>
-                    {editModoMSI&&<button onClick={()=>{ setLocalPlanes(p=>p.filter(x=>x.id!==m.id)); dash?.onDeleteMsi?.(m.id); }} style={{ background:"none", border:`1px solid ${C.red}40`, borderRadius:6, color:C.red, padding:"3px 8px", fontSize:11, cursor:"pointer" }}>✕ Borrar</button>}
-                  </div>
+                  {editModoMSI&&<div style={{ display:"flex", flexDirection:"column", gap:3, alignSelf:"center", marginRight:6, flexShrink:0 }}>
+                    <button onClick={()=>abrirEditMSI(m)} style={{ background:"transparent", border:`1px solid ${C.border}`, borderRadius:5, color:C.textMuted, padding:"2px 7px", fontSize:10, cursor:"pointer", whiteSpace:"nowrap", fontFamily:F }}>✎</button>
+                    <button onClick={()=>{ setLocalPlanes(p=>p.filter(x=>x.id!==m.id)); dash?.onDeleteMsi?.(m.id); }} style={{ background:"none", border:`1px solid ${C.red}28`, borderRadius:5, color:C.red+"99", padding:"2px 7px", fontSize:10, cursor:"pointer", fontFamily:F }}>✕</button>
+                  </div>}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, flexWrap:"wrap" }}>
                       <span style={{ fontSize:12, fontWeight:600, color:C.text }}>{m.descripcion}</span>
