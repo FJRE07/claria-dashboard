@@ -1425,6 +1425,7 @@ function Estado({ txs, groupBudgets, fixedItems, income, msiPlans, prevSavings, 
   const porCategoria = Object.entries(spentByCat).map(([categoria,total])=>({categoria,total}));
   const msiActivosApi = activeMsi.map(p=>({
     id:p.id, descripcion:p.name,
+    monto_total:p.total,
     pagos_hechos:p.paid, total_pagos:p.months,
     pagos_restantes:p.months-p.paid,
     cuota_mensual:p.mo,
